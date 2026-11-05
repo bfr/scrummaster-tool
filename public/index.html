@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scrummaster Assistant</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #171a23; --panel2: #1e222e; --border: #2a2f3d;
+    --text: #e6e8ee; --muted: #8b91a3; --accent: #7c8cff; --accent2: #a78bfa;
+    --ok: #4ade80; --err: #f87171; --radius: 14px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f5f6fa; --panel: #ffffff; --panel2: #eef0f6; --border: #dde1ec; --text: #1a1d29; --muted: #6a7087; --accent: #4f5df0; --accent2: #7c3aed; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text);
+         font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .brand { font-weight: 700; font-size: 17px; display: flex; align-items: center; gap: 10px; margin-right: auto; }
+  .logo { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: grid; place-items: center; color: #fff; font-size: 15px; }
+  .ctl { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  select, input, textarea, button { font: inherit; color: inherit; }
+  select, input.ticket { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 7px 10px; outline: none; text-transform: none; letter-spacing: 0; font-size: 14px; }
+  select:focus, input:focus, textarea:focus { border-color: var(--accent); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--err); }
+  .layout { flex: 1; display: flex; min-height: 0; }
+  aside { width: 270px; padding: 18px; border-right: 1px solid var(--border); background: var(--panel); overflow-y: auto; display: flex; flex-direction: column; gap: 22px; }
+  aside h3 { margin: 0 0 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .ticket-row { display: flex; gap: 8px; }
+  .ticket-row input { flex: 1; min-width: 0; text-transform: uppercase; }
+  button.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: 0; border-radius: 10px; padding: 8px 14px; cursor: pointer; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.1); } button:disabled { opacity: .5; cursor: not-allowed; }
+  .presets { display: flex; flex-direction: column; gap: 8px; }
+  .preset { text-align: left; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; cursor: pointer; transition: .15s; }
+  .preset:hover { border-color: var(--accent); transform: translateX(2px); }
+  .preset small { display: block; color: var(--muted); font-size: 12px; }
+  .tools-list { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 5px; }
+  .tools-list span { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px; font-family: ui-monospace, Menlo, monospace; }
+  main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #log { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
+  .empty { margin: auto; text-align: center; color: var(--muted); max-width: 420px; }
+  .empty .logo { width: 56px; height: 56px; font-size: 28px; margin: 0 auto 14px; border-radius: 16px; }
+  .msg { max-width: 820px; width: fit-content; padding: 12px 16px; border-radius: var(--radius); overflow-wrap: anywhere; }
+  .msg.user { align-self: flex-end; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; white-space: pre-wrap; border-bottom-right-radius: 4px; }
+  .msg.assistant { align-self: flex-start; background: var(--panel); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .msg.error { align-self: flex-start; background: color-mix(in srgb, var(--err) 15%, var(--panel)); border: 1px solid var(--err); }
+  .msg.notice { align-self: center; color: var(--muted); font-size: 13px; padding: 2px 10px; }
+  .msg.assistant > :first-child { margin-top: 0; } .msg.assistant > :last-child { margin-bottom: 0; }
+  .msg p { margin: .5em 0; } .msg ul, .msg ol { padding-left: 1.4em; margin: .5em 0; }
+  .msg a { color: var(--accent); } .msg h1, .msg h2, .msg h3 { margin: .8em 0 .3em; line-height: 1.25; }
+  .msg h1 { font-size: 1.25em; } .msg h2 { font-size: 1.12em; } .msg h3 { font-size: 1em; }
+  .msg code { background: var(--panel2); padding: 1px 5px; border-radius: 5px; font-size: .9em; font-family: ui-monospace, Menlo, monospace; }
+  .msg pre { background: var(--panel2); padding: 12px; border-radius: 10px; overflow-x: auto; } .msg pre code { background: none; padding: 0; }
+  .msg table { border-collapse: collapse; margin: .6em 0; display: block; overflow-x: auto; }
+  .msg th, .msg td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; } .msg th { background: var(--panel2); }
+  .meta { margin-top: 8px; font-size: 11px; color: var(--muted); }
+  details.tool { align-self: flex-start; max-width: 820px; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 6px 12px; font-size: 13px; }
+  details.tool summary { cursor: pointer; color: var(--muted); list-style: none; display: flex; gap: 8px; align-items: center; }
+  details.tool summary::before { content: "▸"; } details.tool[open] summary::before { content: "▾"; }
+  details.tool pre { margin: 8px 0 2px; white-space: pre-wrap; max-height: 260px; overflow: auto; font-size: 12px; font-family: ui-monospace, Menlo, monospace; }
+  .spin { width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: s .7s linear infinite; }
+  @keyframes s { to { transform: rotate(360deg); } }
+  .typing { align-self: flex-start; color: var(--muted); display: flex; gap: 8px; align-items: center; font-size: 13px; }
+  form#composer { display: flex; gap: 10px; padding: 14px 24px 20px; align-items: flex-end; }
+  textarea { flex: 1; resize: none; max-height: 200px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; outline: none; }
+  form#composer button { padding: 12px 20px; border-radius: var(--radius); }
+  .ghost { background: none; border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; cursor: pointer; color: var(--muted); }
+  .ghost:hover { color: var(--text); border-color: var(--accent); }
+  #banner { display: none; background: color-mix(in srgb, #f59e0b 18%, var(--panel)); border-bottom: 1px solid #f59e0b; padding: 8px 20px; font-size: 13px; }
+  @media (max-width: 800px) { aside { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="logo">✦</span> Scrummaster Assistant</div>
+  <label class="ctl">Model <select id="model"><option>loading…</option></select></label>
+  <label class="ctl">Reasoning
+    <select id="effort">
+      <option value="default">Default</option>
+      <option value="minimal">Minimal</option>
+      <option value="low">Low</option>
+      <option value="medium">Medium</option>
+      <option value="high">High</option>
+    </select>
+  </label>
+  <span class="ctl" title="Atlassian MCP connection"><span id="mcpDot" class="dot"></span><span id="mcpText">MCP</span></span>
+  <button class="ghost" id="clear">New chat</button>
+</header>
+<div id="banner"></div>
+<div class="layout">
+  <aside>
+    <section>
+      <h3>Look up a ticket</h3>
+      <div class="ticket-row">
+        <input class="ticket" id="ticketId" placeholder="UHF-1234" maxlength="20" autocomplete="off">
+        <button class="primary" id="retrieve">Retrieve</button>
+      </div>
+    </section>
+    <section>
+      <h3>Quick tasks</h3>
+      <div class="presets" id="presets"></div>
+    </section>
+    <section>
+      <h3>Tools available</h3>
+      <div class="tools-list" id="tools"></div>
+    </section>
+  </aside>
+  <main>
+    <div id="log"></div>
+    <form id="composer">
+      <textarea id="input" rows="1" placeholder="Ask about tickets, sprints, refinement, hours…  (Enter to send, Shift+Enter for newline)"></textarea>
+      <button class="primary" id="send" type="submit">Send</button>
+    </form>
+  </main>
+</div>
+
+<script>
+// ─── EDIT ME: example buttons. `prompt` is sent to the assistant as-is. ───
+const PRESETS = [
+  { label: 'Refinement list',     hint: 'All tickets waiting for refinement', prompt: 'Get all refinement tickets and show them grouped by epic.' },
+  { label: 'Recent refinement',   hint: 'Created in the last 2 weeks',       prompt: 'Show refinement tickets created in the last 2 weeks.' },
+  { label: 'Current sprint pages', hint: 'Confluence sprint report links',    prompt: 'Give me links to the latest sprint report pages.' },
+  { label: 'Team process help',   hint: 'What to do on sprint changeover',   prompt: 'What do we need to do on the sprint changeover day?' },
+  { label: 'What can you do?',    hint: 'List tools and examples',           prompt: 'What tools do you have and what can I ask you?' },
+];
+// Ticket button prompt. Change it to fetch whatever you need.
+const ticketPrompt = (id) => `Retrieve ticket ${id} and summarize it: status, assignee, epic, story points and what is left to do.`;
+
+// ─── App ───
+const $ = (id) => document.getElementById(id);
+const log = $('log'), input = $('input');
+let history = [], busy = false;
+
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// Small, safe markdown renderer (escapes first). Replace with marked + DOMPurify if you need more.
+function md(src) {
+  const blocks = [];
+  let t = esc(src).replace(/```(\w*)\n([\s\S]*?)```/g, (_, l, c) => { blocks.push(`<pre><code>${c}</code></pre>`); return `\u0000${blocks.length - 1}\u0000`; });
+  const inline = (s) => s
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[\s(])\*([^*\s][^*]*)\*/g, '$1<em>$2</em>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+  const lines = t.split('\n'); const out = []; let i = 0;
+  while (i < lines.length) {
+    const l = lines[i];
+    if (/^\s*\|.*\|\s*$/.test(l) && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1] || '')) {
+      const row = (r, tag) => '<tr>' + r.trim().replace(/^\||\|$/g, '').split('|').map((c) => `<${tag}>${inline(c.trim())}</${tag}>`).join('') + '</tr>';
+      let html = '<table><thead>' + row(l, 'th') + '</thead><tbody>'; i += 2;
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) html += row(lines[i++], 'td');
+      out.push(html + '</tbody></table>'); continue;
+    }
+    let m;
+    if ((m = l.match(/^(#{1,3})\s+(.*)/))) { out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`); i++; continue; }
+    if (/^\s*[-*]\s+/.test(l)) { let h = '<ul>'; while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) h += `<li>${inline(lines[i++].replace(/^\s*[-*]\s+/, ''))}</li>`; out.push(h + '</ul>'); continue; }
+    if (/^\s*\d+\.\s+/.test(l)) { let h = '<ol>'; while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) h += `<li>${inline(lines[i++].replace(/^\s*\d+\.\s+/, ''))}</li>`; out.push(h + '</ol>'); continue; }
+    if (!l.trim()) { i++; continue; }
+    let p = []; while (i < lines.length && lines[i].trim() && !/^(#{1,3}\s|\s*[-*]\s|\s*\d+\.\s|\s*\|)/.test(lines[i])) p.push(lines[i++]);
+    if (!p.length) { p.push(lines[i++]); }
+    out.push(`<p>${inline(p.join('<br>'))}</p>`);
+  }
+  return out.join('').replace(/\u0000(\d+)\u0000/g, (_, n) => blocks[n]);
+}
+
+function add(cls, html, raw) {
+  $('empty')?.remove();
+  const d = document.createElement('div'); d.className = `msg ${cls}`;
+  raw ? (d.textContent = html) : (d.innerHTML = html);
+  log.appendChild(d); log.scrollTop = log.scrollHeight; return d;
+}
+function showEmpty() {
+  log.innerHTML = '<div class="empty" id="empty"><div class="logo">✦</div><h2>How can I help?</h2><p>Ask a question, pick a quick task, or look up a ticket by its ID.</p></div>';
+}
+
+async function send(text) {
+  text = text.trim(); if (!text || busy) return;
+  busy = true; $('send').disabled = $('retrieve').disabled = true;
+  history.push({ role: 'user', content: text });
+  add('user', text, true);
+  const typing = document.createElement('div'); typing.className = 'typing'; typing.innerHTML = '<span class="spin"></span> Thinking…';
+  log.appendChild(typing); log.scrollTop = log.scrollHeight;
+  const tools = {};
+  try {
+    const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: $('model').value, effort: $('effort').value, history }) });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+    const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
+    for (;;) {
+      const { done, value } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl; while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl); buf = buf.slice(nl + 1); if (!line) continue;
+        const ev = JSON.parse(line);
+        if (ev.type === 'tool_call') {
+          const d = document.createElement('details'); d.className = 'tool';
+          d.innerHTML = `<summary><span class="spin"></span> <b>${esc(ev.name)}</b> <span>${esc(JSON.stringify(ev.args))}</span></summary><pre></pre>`;
+          log.insertBefore(d, typing); tools[ev.id] = d;
+        } else if (ev.type === 'tool_result') {
+          const d = tools[ev.id]; d.querySelector('.spin').outerHTML = ev.ok ? '✓' : '✗'; d.querySelector('pre').textContent = ev.preview;
+        } else if (ev.type === 'notice') {
+          log.insertBefore(Object.assign(document.createElement('div'), { className: 'msg notice', textContent: ev.text }), typing);
+        } else if (ev.type === 'message') {
+          history.push({ role: 'assistant', content: ev.content });
+          const m = add('assistant', md(ev.content || '(empty response)'));
+          const u = ev.usage; if (u) m.insertAdjacentHTML('beforeend', `<div class="meta">${esc($('model').value)} · ${u.prompt_tokens} in / ${u.completion_tokens} out tokens</div>`);
+          log.insertBefore(m, typing);
+        } else if (ev.type === 'error') throw new Error(ev.error);
+      }
+      log.scrollTop = log.scrollHeight;
+    }
+  } catch (e) {
+    history.pop(); // let the user retry the same question
+    add('error', '⚠ ' + e.message, true);
+  } finally {
+    typing.remove(); busy = false; $('send').disabled = $('retrieve').disabled = false; input.focus(); log.scrollTop = log.scrollHeight;
+  }
+}
+
+// ─── Wiring ───
+$('composer').addEventListener('submit', (e) => { e.preventDefault(); const v = input.value; input.value = ''; input.style.height = 'auto'; send(v); });
+input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('composer').requestSubmit(); } });
+input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 200) + 'px'; });
+$('clear').onclick = () => { if (busy) return; history = []; showEmpty(); };
+function retrieve() {
+  const id = $('ticketId').value.trim().toUpperCase();
+  if (!/^[A-Z][A-Z0-9]*-\d+$/.test(id)) { $('ticketId').style.borderColor = 'var(--err)'; return; }
+  $('ticketId').style.borderColor = ''; send(ticketPrompt(id));
+}
+$('retrieve').onclick = retrieve;
+$('ticketId').addEventListener('keydown', (e) => { if (e.key === 'Enter') retrieve(); });
+$('presets').innerHTML = '';
+PRESETS.forEach((p) => {
+  const b = document.createElement('button'); b.className = 'preset'; b.innerHTML = `${esc(p.label)}<small>${esc(p.hint)}</small>`;
+  b.onclick = () => send(p.prompt); $('presets').appendChild(b);
+});
+
+async function init() {
+  showEmpty();
+  const [status, tools] = await Promise.all([fetch('/api/status').then((r) => r.json()), fetch('/api/tools').then((r) => r.json())]);
+  $('mcpDot').className = 'dot ' + (status.mcp.connected ? 'ok' : 'bad');
+  $('mcpText').textContent = status.mcp.connected ? `MCP · ${tools.tools.length} tools${status.mcp.readOnly ? ' (read-only)' : ''}` : 'MCP offline';
+  $('mcpText').title = status.mcp.error || '';
+  $('tools').innerHTML = tools.tools.map((t) => `<span title="${esc(t.description || '')}">${esc(t.name)}</span>`).join('');
+  const banner = (t) => { $('banner').textContent = t; $('banner').style.display = 'block'; };
+  if (!status.azureConfigured) banner('Azure is not configured — set AOAI_BASE_URL and AZURE_API_KEY in .env.');
+  if (status.mcp.error) banner(status.mcp.error);
+  try {
+    const m = await fetch('/api/models').then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error); return j; });
+    $('model').innerHTML = m.models.map((x) => `<option value="${esc(x.id)}" title="${esc(x.model + (x.version ? ' ' + x.version : ''))}">${esc(x.id)}</option>`).join('');
+    if (status.defaultModel && m.models.some((x) => x.id === status.defaultModel)) $('model').value = status.defaultModel;
+    if (m.warning) banner(m.warning);
+  } catch (e) { $('model').innerHTML = '<option value="">unavailable</option>'; banner('Could not load models: ' + e.message); }
+}
+init();
+</script>
+</body>
+</html>
