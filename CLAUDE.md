@@ -93,9 +93,16 @@ browser (public/index.html)  ──HTTP/NDJSON──▶  server.mjs  ──▶ A
   `az cognitiveservices account deployment list --query '[].{n:name,sku:sku.name}'`. The UI shows an "EU data zone" / "not confirmed EU"
   badge and ⚠ in the dropdown. Models not on the list (new deployments, or Global ones such as gpt-4o, gpt-6.1-sol at the time of writing) are
   flagged until someone with `az` access updates the list. Never claim a model is EU-safe unless it is on the list.
-- **Reasoning level:** the dropdown value is sent as `reasoning_effort` (`minimal|low|medium|high`; "Default" omits it). Models that
-  don't support it (e.g. gpt-4o) reject it with 400; `callModel` retries without it and the UI shows a notice. Don't send
-  `temperature`/`top_p` to reasoning models. Use `max_completion_tokens`, not `max_tokens`.
+- **Verifying with `az` (optional):** the sidebar button "Refresh models and regions" opens a dialog with two options: *from API* (`POST /api/models/refresh` `{source:'api'}`, clears the model cache) and *from Azure CLI* (`{source:'az'}`; enabled only when `GET /api/az/status` reports az installed and signed in). The az path
+  (`refreshFromAz()` in `server.mjs`). It finds the resource by the first label of the `AOAI_BASE_URL` host among `az cognitiveservices account list`
+  (optionally `AZURE_SUBSCRIPTION_ID` to pick a subscription), reads each deployment's `sku.name` and `capabilities.area`, and caches it in
+  `.az-models.json` (git-ignored). EU = SKU not `Global*` and area `EUR`. Verified data overrides the built-in `DATA_ZONE_MODELS` list.
+  Needs `az` installed, `az login`, and read access to the resource; the endpoint returns a plain-language error otherwise (not installed /
+  not signed in / no permission). If the user wants this, help them install az (https://aka.ms/installazurecli) and run `az login`.
+- **Reasoning level:** support varies per deployment (gpt-4o: none; gpt-5.5: no `minimal`; gpt-6.1-sol: only low..xhigh). `probeReasoning()` in
+  `server.mjs` tests each level with a 16-token request (`GET /api/reasoning?model=`; cached until restart) and the UI greys out unsupported
+  levels. The chosen value is sent as `reasoning_effort` ("Default" omits it); if a model still rejects it, `callModel` retries without and the
+  UI shows a notice. Don't send `temperature`/`top_p` to reasoning models. Use `max_completion_tokens` (min 16), not `max_tokens`.
 - **Tool calling loop (`chat()` in `server.mjs`):** MCP tools are converted to OpenAI function tools (`toOpenAiTools`). The model replies
   with `tool_calls` → the server runs each via `mcp.callTool` → results are appended as `role: "tool"` messages → repeat, at most
   `MAX_TOOL_ROUNDS` (8), then a final answer. Tool results are truncated to 30,000 chars.

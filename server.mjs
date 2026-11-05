@@ -1,12 +1,14 @@
 // Scrummaster tool backend.
 //  - serves public/index.html
-//  - GET  /api/models  -> chat deployments from Azure Foundry
+//  - GET  /api/models  -> chat deployments from Azure Foundry (+ EU data-zone flag)
+//  - GET  /api/reasoning?model=x -> which reasoning levels that deployment accepts (probed)
+//  - POST /api/models/refresh -> optional: verify SKU/region with `az` (needs az login + access)
 //  - GET  /api/tools   -> tools exposed by the Atlassian MCP
 //  - POST /api/chat    -> runs the model <-> MCP tool-calling loop, streams NDJSON events
 // Keys never leave this process. Binds to localhost only.
 import 'dotenv/config';
 import http from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { resolve, dirname, join } from 'node:path';
@@ -73,7 +75,7 @@ let modelCache = { at: 0, value: null };
 // Premade fallback, used when the live lookup fails. Edit freely (or set AZURE_MODELS in .env).
 const FALLBACK_MODELS = ['gpt-5-mini', 'gpt-5-nano', 'gpt-5', 'gpt-5.1', 'gpt-5.5', 'gpt-4o'];
 // GDPR: deployments whose SKU is DataZoneStandard (EU data zone: processing stays in the EU).
-// The key-only API can't report the SKU, so this is a snapshot of `az cognitiveservices account deployment list`
+// The key-only API can't report the SKU, so this is a snapshot (the UI's "Refresh" button replaces it with live `az` data) of `az cognitiveservices account deployment list`
 // (sku.name). Anything not listed here is shown as "not confirmed EU" - update the list when deployments change,
 // or override with DATA_ZONE_MODELS=gpt-5,gpt-5-mini in .env.
 const DATA_ZONE_MODELS = (env.DATA_ZONE_MODELS ? env.DATA_ZONE_MODELS.split(',') : ['gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-5.1', 'gpt-5.5'])
@@ -110,11 +112,89 @@ async function listModelsRaw() {
   return value;
 }
 
+// ── Optional: verify SKU / data region with Azure CLI (button in the UI) ──
+// Needs `az` installed, `az login`, and read access to the Foundry resource. Result is cached in .az-models.json.
+const AZ_CACHE = join(here, '.az-models.json');
+let azInfo = null; // { fetchedAt, account, deployments: { name: { sku, area, location, eu } } }
+try { azInfo = JSON.parse(await readFile(AZ_CACHE, 'utf8')); } catch {}
+
+async function refreshFromAz() {
+  const az = (args) => run('az', [...args, '-o', 'json'], { timeout: 60000 }).then((r) => JSON.parse(r.stdout));
+  const fail = (e) => {
+    if (e.code === 'ENOENT') throw new Error('Azure CLI (az) is not installed on this computer.');
+    const m = (e.stderr || e.message || '').toString();
+    if (/az login|AADSTS|Please run|credentials/i.test(m)) throw new Error('Not signed in to Azure. Run `az login` in a terminal, then try again.');
+    if (/AuthorizationFailed|does not have authorization|forbidden|403/i.test(m)) throw new Error('Your Azure account has no permission to read this Foundry resource.');
+    throw new Error(`az failed: ${m.split('\n').find((l) => l.trim()) || e.message}`.slice(0, 300));
+  };
+  try {
+    const name = new URL(BASE_URL).hostname.split('.')[0]; // account name = first label of the endpoint host
+    const sub = env.AZURE_SUBSCRIPTION_ID ? ['--subscription', env.AZURE_SUBSCRIPTION_ID] : [];
+    const accounts = await az(['cognitiveservices', 'account', 'list', ...sub]);
+    const acc = accounts.find((a) => a.name.toLowerCase() === name.toLowerCase());
+    if (!acc) throw new Error(`No Azure resource "${name}" visible to your az account/subscription (set AZURE_SUBSCRIPTION_ID in .env if you use several).`);
+    const [, subId, rg] = acc.id.match(/subscriptions\/([^/]+)\/resourceGroups\/([^/]+)/i);
+    const deps = await az(['cognitiveservices', 'account', 'deployment', 'list', '--subscription', subId, '-g', rg, '-n', acc.name]);
+    const deployments = {};
+    for (const d of deps) {
+      const sku = d.sku?.name || 'unknown', area = d.properties?.capabilities?.area || null;
+      // EU processing = not a Global SKU and Microsoft says the area is EUR (data zone EU, or a regional deployment in an EU region)
+      deployments[d.name] = { sku, area, location: acc.location, eu: !/^Global/i.test(sku) && area === 'EUR' };
+    }
+    azInfo = { fetchedAt: new Date().toISOString(), account: name, deployments };
+    await writeFile(AZ_CACHE, JSON.stringify(azInfo, null, 2));
+    modelCache = { at: 0, value: null };
+    return { count: Object.keys(deployments).length, fetchedAt: azInfo.fetchedAt };
+  } catch (e) { if (e.message?.startsWith('No Azure resource')) throw e; fail(e); }
+}
+
+// Is az installed and signed in? (used to enable/disable the option in the refresh dialog)
+async function azStatus() {
+  try {
+    const { stdout } = await run('az', ['account', 'show', '-o', 'json'], { timeout: 15000 });
+    return { installed: true, signedIn: true, user: JSON.parse(stdout).user?.name || null };
+  } catch (e) {
+    return e.code === 'ENOENT' ? { installed: false, signedIn: false } : { installed: true, signedIn: false };
+  }
+}
+
+const regionLabel = (sku) => (/^DataZone/i.test(sku) ? 'EU data zone' : /^Global/i.test(sku) ? 'Global (any region)' : `Regional (${azInfo?.deployments && Object.values(azInfo.deployments)[0]?.location || 'single region'})`);
+
 async function listModels() {
   const v = await listModelsRaw();
-  let models = v.models.map((m) => ({ ...m, dataZone: isDataZone(m.id) }));
+  let models = v.models.map((m) => {
+    const info = azInfo?.deployments?.[m.id];
+    if (info) return { ...m, dataZone: info.eu, verified: true, sku: info.sku, region: regionLabel(info.sku) };
+    return { ...m, dataZone: isDataZone(m.id), verified: false };
+  });
   if (REQUIRE_DATA_ZONE) models = models.filter((m) => m.dataZone);
-  return { ...v, models, requireDataZone: REQUIRE_DATA_ZONE };
+  return { ...v, models, requireDataZone: REQUIRE_DATA_ZONE, verifiedAt: azInfo?.fetchedAt || null };
+}
+
+// ───────────────────────── Reasoning levels per model ─────────────────────────
+// Not every model supports reasoning_effort, and the accepted values differ. Instead of a hard-coded table we probe the
+// deployment once (tiny requests, 16 tokens) and remember the answer until the server restarts.
+const REASONING_LEVELS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'];
+const reasoningCache = new Map();
+
+async function probeReasoning(model) {
+  if (reasoningCache.has(model)) return reasoningCache.get(model);
+  const results = await Promise.all(REASONING_LEVELS.map(async (level) => {
+    try {
+      const r = await fetch(`${BASE_URL}/chat/completions`, {
+        method: 'POST', headers: { 'api-key': API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }], max_completion_tokens: 16, reasoning_effort: level }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (r.ok) return [level, true];
+      if (r.status === 400) return [level, false];
+    } catch {}
+    return [level, null]; // unknown (rate limit, timeout...)
+  }));
+  const unknown = results.some(([, v]) => v === null);
+  const value = { levels: results.filter(([, v]) => v !== false).map(([l]) => l), probed: !unknown };
+  if (!unknown) reasoningCache.set(model, value); // don't cache an uncertain answer
+  return value;
 }
 
 // ───────────────────────── Chat loop ─────────────────────────
@@ -216,6 +296,21 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && pathname === '/api/models') {
       try { return json(res, 200, await listModels()); } catch (e) { return json(res, 502, { error: e.message }); }
+    }
+    if (req.method === 'GET' && pathname === '/api/reasoning') {
+      const model = new URL(req.url, 'http://localhost').searchParams.get('model');
+      if (!(await listModels()).models.some((m) => m.id === model)) return json(res, 404, { error: 'Unknown model' });
+      return json(res, 200, await probeReasoning(model));
+    }
+    if (req.method === 'GET' && pathname === '/api/az/status') return json(res, 200, await azStatus());
+    if (req.method === 'POST' && pathname === '/api/models/refresh') {
+      try {
+        const { source } = await readBody(req);
+        if (source === 'az') return json(res, 200, await refreshFromAz());
+        modelCache = { at: 0, value: null }; // 'api': just re-ask Azure with the API key
+        const v = await listModels();
+        return json(res, 200, { count: v.models.length, source: v.source });
+      } catch (e) { return json(res, 502, { error: e.message }); }
     }
     if (req.method === 'GET' && pathname === '/api/tools') {
       return json(res, 200, { tools: mcpTools.map((t) => ({ name: t.name, description: t.description })) });

@@ -11,10 +11,11 @@ It is meant as a **template**: a simple, working starting point that you extend 
 
 - Chat interface with Markdown answers; tool calls are shown inline (click to see the raw output)
 - **Model selector** filled from the Azure deployments (looked up with just the API key; premade list as fallback)
-- **Reasoning level selector** (Default / Minimal / Low / Medium / High; ignored automatically by models that don't support it)
+- **Reasoning level selector**: the app checks which levels the chosen model accepts and greys out the rest (disabled completely for models like gpt-4o)
 - **Quick-task buttons** with predefined prompts
 - **Ticket field** with a "Retrieve" example button
 - **GDPR flag:** each model is marked "EU data zone" or "not confirmed EU" (global deployments may process data outside the EU)
+- **Refresh models and regions** button opens a dialog: *refresh from API* (works for everyone) or *refresh from Azure CLI* (greyed out unless `az` is installed and signed in). The az option: with the `az` CLI installed, `az login` done and read access to the Foundry resource, it reads each deployment's real SKU (EU data zone / Global / Regional) and remembers it in the git-ignored `.az-models.json`. Without it the built-in list is used
 - Read-only by default: the model can only use MCP tools that read data
 
 ## Easiest way to get started: let Claude set it up

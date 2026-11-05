@@ -26,6 +26,10 @@
   .zone { padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; }
   .zone.eu { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); border: 1px solid var(--ok); }
   .zone.warn { background: color-mix(in srgb, #f59e0b 20%, transparent); color: #f59e0b; border: 1px solid #f59e0b; }
+  .iconbtn { position: relative; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border); background: var(--panel2); color: var(--muted); font-size: 17px; line-height: 1; cursor: pointer; display: grid; place-items: center; padding: 0; }
+  .iconbtn:hover { color: var(--text); border-color: var(--accent); }
+  .iconbtn::after { content: attr(data-tip); position: absolute; top: calc(100% + 10px); left: 0; width: max-content; max-width: 280px; white-space: pre-line; text-align: left; background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; box-shadow: 0 8px 24px #0006; opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 20; }
+  .iconbtn:hover::after, .iconbtn:focus-visible::after { opacity: 1; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); display: inline-block; }
   .dot.ok { background: var(--ok); } .dot.bad { background: var(--err); }
   .layout { flex: 1; display: flex; min-height: 0; }
@@ -39,6 +43,14 @@
   .preset { text-align: left; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; cursor: pointer; transition: .15s; }
   .preset:hover { border-color: var(--accent); transform: translateX(2px); }
   .preset small { display: block; color: var(--muted); font-size: 12px; }
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; width: min(480px, 92vw); box-shadow: 0 20px 60px #0008; }
+  dialog::backdrop { background: #0009; backdrop-filter: blur(2px); }
+  dialog h3 { margin: 0 0 14px; font-size: 17px; }
+  .opt { display: block; width: 100%; text-align: left; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; cursor: pointer; }
+  .opt:hover:not(:disabled) { border-color: var(--accent); }
+  .opt small { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
+  .dlg-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+  .muted { color: var(--muted); font-size: 12px; margin-top: 8px; }
   .tools-list { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 5px; }
   .tools-list span { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px; font-family: ui-monospace, Menlo, monospace; }
   main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -78,14 +90,16 @@
 <body>
 <header>
   <div class="brand"><span class="logo">✦</span> Scrummaster Assistant</div>
-  <label class="ctl">Model <select id="model"><option>loading…</option></select></label>
+  <span class="ctl"><button class="iconbtn" id="refreshModels" aria-label="Refresh models and regions" data-tip="Refresh models and regions">↻</button><label class="ctl" style="gap:8px">Model <select id="model"><option>loading…</option></select></label></span>
   <label class="ctl">Reasoning
     <select id="effort">
       <option value="default">Default</option>
+      <option value="none">None</option>
       <option value="minimal">Minimal</option>
       <option value="low">Low</option>
       <option value="medium">Medium</option>
       <option value="high">High</option>
+      <option value="xhigh">Extra high</option>
     </select>
   </label>
   <span class="ctl" id="zone" title=""></span>
@@ -120,6 +134,20 @@
   </main>
 </div>
 
+<dialog id="refreshDlg">
+  <h3>Refresh models</h3>
+  <button class="opt" id="optApi">
+    <b>Refresh models from API</b>
+    <small>Reloads the list of deployments using the API key. Works for everyone. Does not tell the data region; EU status comes from the built-in list or the last az check.</small>
+  </button>
+  <button class="opt" id="optAz">
+    <b>Refresh models and regions from Azure CLI</b>
+    <small id="azHint">Checking…</small>
+  </button>
+  <div class="muted" id="dlgMsg"></div>
+  <div class="dlg-actions"><button class="ghost" id="dlgClose">Close</button></div>
+</dialog>
+
 <script>
 // ─── EDIT ME: example buttons. `prompt` is sent to the assistant as-is. ───
 const PRESETS = [
@@ -136,13 +164,28 @@ const ticketPrompt = (id) => `Retrieve ticket ${id} and summarize it: status, as
 const $ = (id) => document.getElementById(id);
 const log = $('log'), input = $('input');
 let history = [], busy = false, modelInfo = {};
+// Enable only the reasoning levels the selected deployment accepts (probed by the server).
+let reasoningReq = 0;
+async function updateReasoning() {
+  const sel = $('effort'), model = $('model').value, req = ++reasoningReq;
+  if (!model) return;
+  sel.disabled = true; sel.title = 'Checking which reasoning levels this model supports…';
+  const r = await fetch('/api/reasoning?model=' + encodeURIComponent(model)).then((x) => x.json()).catch(() => null);
+  if (req !== reasoningReq) return; // user switched model meanwhile
+  const levels = r?.levels;
+  [...sel.options].forEach((o) => { o.disabled = !!levels && o.value !== 'default' && !levels.includes(o.value); });
+  if (levels && !levels.length) { sel.value = 'default'; sel.disabled = true; sel.title = 'This model does not support reasoning levels'; return; }
+  if (sel.selectedOptions[0]?.disabled) sel.value = 'default';
+  sel.disabled = false; sel.title = levels ? 'Greyed-out levels are not supported by this model' : 'Could not check supported levels';
+}
+
 function updateZone() {
   const m = modelInfo[$('model').value]; const z = $('zone');
   if (!m) { z.className = 'ctl'; z.textContent = ''; return; }
   $('model').style.borderColor = m.dataZone ? 'var(--ok)' : '#f59e0b';
   z.className = 'ctl zone ' + (m.dataZone ? 'eu' : 'warn');
-  z.textContent = m.dataZone ? '🇪🇺 EU data zone' : '⚠ not confirmed EU';
-  z.title = m.dataZone ? 'DataZoneStandard deployment: data is processed within the EU' : 'Global or unverified deployment: data may be processed outside the EU. Avoid personal data.';
+  z.textContent = m.dataZone ? '🇪🇺 ' + (m.region || 'EU data zone') : '⚠ ' + (m.region || 'not confirmed EU');
+  z.title = (m.verified ? `Verified with az: SKU ${m.sku}. ` : 'Not verified (built-in list). ') + (m.dataZone ? 'Data is processed within the EU.' : 'Data may be processed outside the EU. Avoid personal data.');
 }
 
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -260,16 +303,51 @@ async function init() {
   const banner = (t) => { $('banner').textContent = t; $('banner').style.display = 'block'; };
   if (!status.azureConfigured) banner('Azure is not configured — set AOAI_BASE_URL and AZURE_API_KEY in .env.');
   if (status.mcp.error) banner(status.mcp.error);
+  await loadModels();
+}
+
+async function loadModels(keep) {
+  const banner = (x) => { $('banner').textContent = x; $('banner').style.display = 'block'; };
   try {
     const m = await fetch('/api/models').then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error); return j; });
     modelInfo = Object.fromEntries(m.models.map((x) => [x.id, x]));
-    $('model').innerHTML = m.models.map((x) => `<option value="${esc(x.id)}">${x.dataZone ? '🇪🇺' : '⚠️'}  ${esc(x.id)}</option>`).join('');
-    $('model').onchange = updateZone;
-    if (status.defaultModel && m.models.some((x) => x.id === status.defaultModel)) $('model').value = status.defaultModel;
-    updateZone();
+    $('model').innerHTML = m.models.map((x) => `<option value="${esc(x.id)}" title="${esc((x.region || '') + (x.sku ? ' · ' + x.sku : ''))}">${x.dataZone ? '🇪🇺' : '⚠️'}  ${esc(x.id)}</option>`).join('');
+    $('model').onchange = () => { updateZone(); updateReasoning(); };
+    const st = await fetch('/api/status').then((r) => r.json());
+    if (keep && modelInfo[keep]) $('model').value = keep; else if (st.defaultModel && modelInfo[st.defaultModel]) $('model').value = st.defaultModel;
+    $('refreshModels').dataset.tip = 'Refresh models and regions\n' + (m.verifiedAt ? `✓ Regions verified with az on ${new Date(m.verifiedAt).toLocaleString()}` : 'Regions not verified: using the built-in list of EU deployments.') + '\nClick to reload from the API or check with the Azure CLI.';
+    updateZone(); updateReasoning();
     if (m.warning) banner(m.warning);
   } catch (e) { $('model').innerHTML = '<option value="">unavailable</option>'; banner('Could not load models: ' + e.message); }
 }
+
+const dlg = $('refreshDlg');
+async function doRefresh(source) {
+  $('optApi').disabled = $('optAz').disabled = true; $('dlgMsg').textContent = 'Asking Azure…';
+  try {
+    const r = await fetch('/api/models/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source }) });
+    const j = await r.json(); if (!r.ok) throw new Error(j.error);
+    $('banner').style.display = 'none'; await loadModels($('model').value);
+    const n = Object.keys(modelInfo).length;
+    $('dlgMsg').textContent = source === 'az'
+      ? `✓ Checked ${j.count} deployments with az. ${n} are chat models and are shown in the list; the rest (embeddings, Claude, other APIs) can't be used in this chat.`
+      : `✓ Done: ${n} chat models loaded.`;
+  } catch (e) { $('dlgMsg').textContent = '⚠ ' + e.message; }
+  $('optApi').disabled = false; await checkAz();
+}
+async function checkAz() {
+  const s = await fetch('/api/az/status').then((r) => r.json()).catch(() => ({}));
+  const ok = s.installed && s.signedIn;
+  $('optAz').disabled = !ok;
+  $('azHint').textContent = ok ? `Reads each deployment's real SKU, so the EU / global status is verified. Signed in as ${s.user || 'your az account'}; needs read access to the Foundry resource.`
+    : s.installed ? 'Not signed in. Run "az login" in a terminal, then reopen this dialog.' : 'Not available: the Azure CLI (az) is not installed on this computer.';
+}
+$('refreshModels').onclick = () => { $('dlgMsg').textContent = ''; dlg.showModal(); checkAz(); };
+$('optApi').onclick = () => doRefresh('api');
+$('optAz').onclick = () => doRefresh('az');
+$('dlgClose').onclick = () => dlg.close();
+dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+
 init();
 </script>
 </body>
