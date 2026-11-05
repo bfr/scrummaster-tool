@@ -49,6 +49,8 @@ whether they are set. Check with e.g. `grep -c '^AZURE_API_KEY=.\+' .env`.
 | `AZURE_MODELS` | no | Comma-separated fixed model list; skips the live lookup. |
 | `JIRA_MCP_DIR` | no | Path to the MCP folder (default `./mcp/jira-to-confluence`). |
 | `ALLOW_WRITE_TOOLS` | no | `true` lets the model use MCP tools that create/update/delete (create Jira issue, update Confluence page, notes). Default `false` = read-only. Turn on only if the user asks, and say so clearly. |
+| `DATA_ZONE_MODELS` | no | Comma-separated deployments that are EU data-zone (SKU `DataZoneStandard`). Default list `DATA_ZONE_MODELS` in `server.mjs`. |
+| `REQUIRE_DATA_ZONE` | no | `true` hides/refuses models outside that list. Default `false` (shown with a ⚠ warning). |
 | `PORT` | no | Default 3000. |
 
 ### `mcp/jira-to-confluence/.env` (Atlassian/Tempo; read by the MCP itself)
@@ -86,6 +88,11 @@ browser (public/index.html)  ──HTTP/NDJSON──▶  server.mjs  ──▶ A
   image, audio), caches 5 min. If the lookup fails it falls back to `FALLBACK_MODELS` in `server.mjs` and shows a warning.
   Claude deployments exist on the resource but are **not** served by this endpoint (404), so they are filtered out. Embedding
   deployments use a different endpoint and are not for chat.
+- **GDPR / data zone:** the key-only API can't report a deployment's SKU (`DataZoneStandard` = EU processing, `GlobalStandard` = may be
+  processed anywhere), so `server.mjs` keeps a list (`DATA_ZONE_MODELS`) taken from
+  `az cognitiveservices account deployment list --query '[].{n:name,sku:sku.name}'`. The UI shows an "EU data zone" / "not confirmed EU"
+  badge and ⚠ in the dropdown. Models not on the list (new deployments, or Global ones such as gpt-4o, gpt-6.1-sol at the time of writing) are
+  flagged until someone with `az` access updates the list. Never claim a model is EU-safe unless it is on the list.
 - **Reasoning level:** the dropdown value is sent as `reasoning_effort` (`minimal|low|medium|high`; "Default" omits it). Models that
   don't support it (e.g. gpt-4o) reject it with 400; `callModel` retries without it and the UI shows a notice. Don't send
   `temperature`/`top_p` to reasoning models. Use `max_completion_tokens`, not `max_tokens`.

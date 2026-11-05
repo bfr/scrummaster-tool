@@ -14,6 +14,7 @@ It is meant as a **template**: a simple, working starting point that you extend 
 - **Reasoning level selector** (Default / Minimal / Low / Medium / High; ignored automatically by models that don't support it)
 - **Quick-task buttons** with predefined prompts
 - **Ticket field** with a "Retrieve" example button
+- **GDPR flag:** each model is marked "EU data zone" or "not confirmed EU" (global deployments may process data outside the EU)
 - Read-only by default: the model can only use MCP tools that read data
 
 ## Easiest way to get started: let Claude set it up
@@ -74,6 +75,8 @@ If the header shows "MCP offline", run `cd mcp/jira-to-confluence && node server
 | `AZURE_MODELS` | no | Fixed comma-separated model list instead of the live lookup |
 | `JIRA_MCP_DIR` | no | Where the MCP lives (default `./mcp/jira-to-confluence`) |
 | `ALLOW_WRITE_TOOLS` | no | `true` lets the model create/update things (Jira issues, Confluence pages, notes). Default `false` |
+| `DATA_ZONE_MODELS` | no | Deployments that run in the EU data zone (default list in `server.mjs`) |
+| `REQUIRE_DATA_ZONE` | no | `true` hides and refuses all models not in that list (GDPR). Default `false` = they are shown with a warning |
 | `PORT` | no | Default 3000 |
 
 ## Customising

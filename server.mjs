@@ -72,10 +72,18 @@ let modelCache = { at: 0, value: null };
 
 // Premade fallback, used when the live lookup fails. Edit freely (or set AZURE_MODELS in .env).
 const FALLBACK_MODELS = ['gpt-5-mini', 'gpt-5-nano', 'gpt-5', 'gpt-5.1', 'gpt-5.5', 'gpt-4o'];
+// GDPR: deployments whose SKU is DataZoneStandard (EU data zone: processing stays in the EU).
+// The key-only API can't report the SKU, so this is a snapshot of `az cognitiveservices account deployment list`
+// (sku.name). Anything not listed here is shown as "not confirmed EU" - update the list when deployments change,
+// or override with DATA_ZONE_MODELS=gpt-5,gpt-5-mini in .env.
+const DATA_ZONE_MODELS = (env.DATA_ZONE_MODELS ? env.DATA_ZONE_MODELS.split(',') : ['gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-5.1', 'gpt-5.5'])
+  .map((s) => s.trim()).filter(Boolean);
+const REQUIRE_DATA_ZONE = env.REQUIRE_DATA_ZONE === 'true'; // true = hide and refuse non-data-zone models
+const isDataZone = (id) => DATA_ZONE_MODELS.includes(id);
 const NON_CHAT = /embedding|dall-e|tts|whisper|transcribe|realtime|audio|image|sora/i;
 const asList = (ids, extra = {}) => ids.map((id) => ({ id, model: id }));
 
-async function listModels() {
+async function listModelsRaw() {
   if (modelCache.value && Date.now() - modelCache.at < 5 * 60_000) return modelCache.value;
   let value;
   if (env.AZURE_MODELS) {
@@ -100,6 +108,13 @@ async function listModels() {
   }
   modelCache = { at: Date.now(), value };
   return value;
+}
+
+async function listModels() {
+  const v = await listModelsRaw();
+  let models = v.models.map((m) => ({ ...m, dataZone: isDataZone(m.id) }));
+  if (REQUIRE_DATA_ZONE) models = models.filter((m) => m.dataZone);
+  return { ...v, models, requireDataZone: REQUIRE_DATA_ZONE };
 }
 
 // ───────────────────────── Chat loop ─────────────────────────
@@ -208,6 +223,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && pathname === '/api/chat') {
       const { model, effort, history } = await readBody(req);
       if (!model || !Array.isArray(history) || !history.length) return json(res, 400, { error: 'model and history required' });
+      if (REQUIRE_DATA_ZONE && !isDataZone(model)) return json(res, 403, { error: `${model} is not a confirmed EU data-zone deployment (REQUIRE_DATA_ZONE=true)` });
       if (!BASE_URL || !API_KEY) return json(res, 503, { error: 'Azure is not configured (see .env)' });
       res.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store' });
       const ac = new AbortController();
