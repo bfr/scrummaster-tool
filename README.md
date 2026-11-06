@@ -11,7 +11,7 @@ It is meant as a **template**: a simple, working starting point that you extend 
 
 - Chat interface with Markdown answers; tool calls are shown inline (click to see the raw output)
 - **Model selector** filled from the Azure deployments (looked up with just the API key; premade list as fallback)
-- **Reasoning level selector** (Default / Minimal / Low / Medium / High; ignored automatically by models that don't support it)
+- **Reasoning level selector**: the app checks which levels the chosen model accepts and greys out the rest (disabled completely for models like gpt-4o)
 - **Today panel:** the weekday and date, a to-do list for that weekday (ticks are remembered per day), and the quick tasks for that day
 - **Your own to-dos from the chat:** "add a todo: book the retro room" adds it to the Today list. It stays there day after day
   until you tick it (or say "mark … done"); ticked items disappear when the day changes. Saved in `todos.json` (not in git)
@@ -24,6 +24,7 @@ It is meant as a **template**: a simple, working starting point that you extend 
   message with the next sprint's number, dates and max person-days; recurring meeting/release tickets for the new sprint (preview
   first, never duplicates); the capacity estimate for Aleksi (`npm run getSprintCapacity`); the Teams message for sharing the sprint report
 - **Copy buttons** on replies and on every code block, for pasting into Slack or Teams
+- **Refresh models and regions** button (↻ next to the model) opens a dialog: *refresh from API* (works for everyone) or *refresh from Azure CLI* (greyed out unless `az` is installed and signed in). The az option: with the `az` CLI installed, `az login` done and read access to the Foundry resource, it reads each deployment's real SKU (EU data zone / Global / Regional) and remembers it in the git-ignored `.az-models.json`. Without it the built-in list is used
 - **GDPR flag:** each model is marked "EU data zone" or "not confirmed EU" (global deployments may process data outside the EU)
 - Read-only by default: the model can only use MCP tools that read data. With write tools on, every change
   (create/update/delete) pauses with an **Allow / Cancel** card showing exactly what will be sent

@@ -63,6 +63,8 @@
   .zone { padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; }
   .zone.eu { background: var(--ok-soft); color: var(--ok); border: 1px solid var(--ok); }
   .zone.warn { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn); }
+  .iconbtn { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border); background: var(--panel2); color: var(--muted); font-size: 17px; line-height: 1; cursor: pointer; display: grid; place-items: center; padding: 0; }
+  .iconbtn:hover { color: var(--text); border-color: var(--accent); }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); display: inline-block; }
   .dot.ok { background: var(--ok); } .dot.bad { background: var(--err); }
   .layout { flex: 1; display: flex; min-height: 0; }
@@ -87,6 +89,14 @@
   .todo small { display: block; color: var(--muted); font-size: 12px; text-decoration: none; }
   .none { color: var(--muted); font-size: 13px; }
   .cal-status { margin-top: 10px; font-size: 11px; color: var(--muted); } .cal-status.stale { color: var(--warn); }
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; width: min(480px, 92vw); }
+  dialog::backdrop { background: rgb(0 0 0 / .45); }
+  dialog h3 { margin: 0 0 14px; font-size: 17px; }
+  .opt { display: block; width: 100%; text-align: left; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; cursor: pointer; }
+  .opt:hover:not(:disabled) { border-color: var(--accent); } .opt:disabled { opacity: .55; cursor: default; }
+  .opt small { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
+  .dlg-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+  .muted { color: var(--muted); font-size: 12px; margin-top: 8px; }
   .tools-list { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 5px; }
   .tools-list span { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px; font-family: ui-monospace, Menlo, monospace; }
   main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -135,14 +145,16 @@
 <body>
 <header>
   <div class="brand"><span class="logo">✦</span> Scrummaster Assistant</div>
-  <label class="ctl">Malli <select id="model"><option>ladataan…</option></select></label>
+  <span class="ctl"><button class="iconbtn" id="refreshModels" aria-label="Päivitä mallit ja alueet" title="Päivitä mallit ja alueet">↻</button><label class="ctl" style="gap:8px">Malli <select id="model"><option>ladataan…</option></select></label></span>
   <label class="ctl">Päättely
     <select id="effort">
       <option value="default">Oletus</option>
+      <option value="none">Ei mitään</option>
       <option value="minimal">Minimaalinen</option>
       <option value="low">Matala</option>
       <option value="medium">Keskitaso</option>
       <option value="high">Korkea</option>
+      <option value="xhigh">Erittäin korkea</option>
     </select>
   </label>
   <span class="ctl" id="zone" title=""></span>
@@ -177,6 +189,20 @@
     </form>
   </main>
 </div>
+
+<dialog id="refreshDlg">
+  <h3>Päivitä mallit</h3>
+  <button class="opt" id="optApi">
+    <b>Päivitä mallit API:sta</b>
+    <small>Lataa deploymenttien listan uudelleen API-avaimella. Toimii kaikille. Ei kerro data-aluetta: EU-tila tulee sisäänrakennetusta listasta tai viimeisimmästä az-tarkistuksesta.</small>
+  </button>
+  <button class="opt" id="optAz">
+    <b>Päivitä mallit ja alueet Azure CLI:llä</b>
+    <small id="azHint">Tarkistetaan…</small>
+  </button>
+  <div class="muted" id="dlgMsg"></div>
+  <div class="dlg-actions"><button class="ghost" id="dlgClose">Sulje</button></div>
+</dialog>
 
 <script>
 // ─── EDIT ME: quick-task buttons. `prompt` is sent to the assistant as-is. ───
@@ -326,13 +352,28 @@ const PRESETS = [
 const $ = (id) => document.getElementById(id);
 const log = $('log'), input = $('input');
 let history = [], busy = false, modelInfo = {};
+// Enable only the reasoning levels the selected deployment accepts (probed by the server).
+let reasoningReq = 0;
+async function updateReasoning() {
+  const sel = $('effort'), model = $('model').value, req = ++reasoningReq;
+  if (!model) return;
+  sel.disabled = true; sel.title = 'Tarkistetaan, mitä päättelytasoja malli tukee…';
+  const r = await fetch('/api/reasoning?model=' + encodeURIComponent(model)).then((x) => x.json()).catch(() => null);
+  if (req !== reasoningReq) return; // user switched model meanwhile
+  const levels = r?.levels;
+  [...sel.options].forEach((o) => { o.disabled = !!levels && o.value !== 'default' && !levels.includes(o.value); });
+  if (levels && !levels.length) { sel.value = 'default'; sel.disabled = true; sel.title = 'Tämä malli ei tue päättelytasoja'; return; }
+  if (sel.selectedOptions[0]?.disabled) sel.value = 'default';
+  sel.disabled = false; sel.title = levels ? 'Harmaana olevia tasoja malli ei tue' : 'Tuettuja tasoja ei voitu tarkistaa';
+}
+
 function updateZone() {
   const m = modelInfo[$('model').value]; const z = $('zone');
   if (!m) { z.className = 'ctl'; z.textContent = ''; return; }
   $('model').style.borderColor = m.dataZone ? 'var(--ok)' : 'var(--warn)';
   z.className = 'ctl zone ' + (m.dataZone ? 'eu' : 'warn');
-  z.textContent = m.dataZone ? '🇪🇺 EU-datavyöhyke' : '⚠ EU:ta ei vahvistettu';
-  z.title = m.dataZone ? 'DataZoneStandard-deployment: tiedot käsitellään EU:n sisällä' : 'Globaali tai vahvistamaton deployment: tietoja voidaan käsitellä EU:n ulkopuolella. Vältä henkilötietoja.';
+  z.textContent = m.dataZone ? '🇪🇺 ' + (m.region || 'EU-datavyöhyke') : '⚠ ' + (m.region || 'EU:ta ei vahvistettu');
+  z.title = (m.verified ? `Tarkistettu az:lla: SKU ${m.sku}. ` : 'Ei tarkistettu (sisäänrakennettu lista). ') + (m.dataZone ? 'Tiedot käsitellään EU:n sisällä.' : 'Tietoja voidaan käsitellä EU:n ulkopuolella. Vältä henkilötietoja.');
 }
 
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -604,16 +645,51 @@ async function init() {
   const banner = (t) => { $('banner').textContent = t; $('banner').style.display = 'block'; };
   if (!status.azureConfigured) banner('Azurea ei ole määritetty: aseta AOAI_BASE_URL ja AZURE_API_KEY .env-tiedostoon.');
   if (status.mcp.error) banner(status.mcp.error);
+  await loadModels();
+}
+
+async function loadModels(keep) {
+  const banner = (x) => { $('banner').textContent = x; $('banner').style.display = 'block'; };
   try {
     const m = await fetch('/api/models').then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error); return j; });
     modelInfo = Object.fromEntries(m.models.map((x) => [x.id, x]));
-    $('model').innerHTML = m.models.map((x) => `<option value="${esc(x.id)}">${x.dataZone ? '🇪🇺' : '⚠️'}  ${esc(x.id)}</option>`).join('');
-    $('model').onchange = updateZone;
-    if (status.defaultModel && m.models.some((x) => x.id === status.defaultModel)) $('model').value = status.defaultModel;
-    updateZone();
+    $('model').innerHTML = m.models.map((x) => `<option value="${esc(x.id)}" title="${esc((x.region || '') + (x.sku ? ' · ' + x.sku : ''))}">${x.dataZone ? '🇪🇺' : '⚠️'}  ${esc(x.id)}</option>`).join('');
+    $('model').onchange = () => { updateZone(); updateReasoning(); };
+    const st = await fetch('/api/status').then((r) => r.json());
+    if (keep && modelInfo[keep]) $('model').value = keep; else if (st.defaultModel && modelInfo[st.defaultModel]) $('model').value = st.defaultModel;
+    $('refreshModels').title = 'Päivitä mallit ja alueet\n' + (m.verifiedAt ? `✓ Alueet tarkistettu az:lla ${new Date(m.verifiedAt).toLocaleString('fi-FI')}` : 'Alueita ei ole tarkistettu: käytetään sisäänrakennettua EU-listaa.') + '\nKlikkaa ladataksesi API:sta tai tarkistaaksesi Azure CLI:llä.';
+    updateZone(); updateReasoning();
     if (m.warning) banner(m.warning);
   } catch (e) { $('model').innerHTML = '<option value="">ei saatavilla</option>'; banner('Mallien lataus epäonnistui: ' + e.message); }
 }
+
+const dlg = $('refreshDlg');
+async function doRefresh(source) {
+  $('optApi').disabled = $('optAz').disabled = true; $('dlgMsg').textContent = 'Kysytään Azurelta…';
+  try {
+    const r = await fetch('/api/models/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source }) });
+    const j = await r.json(); if (!r.ok) throw new Error(j.error);
+    $('banner').style.display = 'none'; await loadModels($('model').value);
+    const n = Object.keys(modelInfo).length;
+    $('dlgMsg').textContent = source === 'az'
+      ? `✓ Tarkistettu ${j.count} deploymenttia az:lla. Niistä ${n} on chat-malleja ja näkyy listassa; muita (embeddingit, Claude, muut API:t) ei voi käyttää tässä chatissa.`
+      : `✓ Valmis: ${n} chat-mallia ladattu.`;
+  } catch (e) { $('dlgMsg').textContent = '⚠ ' + e.message; }
+  $('optApi').disabled = false; await checkAz();
+}
+async function checkAz() {
+  const s = await fetch('/api/az/status').then((r) => r.json()).catch(() => ({}));
+  const ok = s.installed && s.signedIn;
+  $('optAz').disabled = !ok;
+  $('azHint').textContent = ok ? `Lukee jokaisen deploymentin todellisen SKU:n, joten EU-/globaali-tila on tarkistettu. Kirjautuneena: ${s.user || 'az-tilisi'}; vaatii lukuoikeuden Foundry-resurssiin.`
+    : s.installed ? 'Et ole kirjautunut. Aja "az login" terminaalissa ja avaa tämä ikkuna uudelleen.' : 'Ei käytettävissä: Azure CLI (az) ei ole asennettu tälle koneelle.';
+}
+$('refreshModels').onclick = () => { $('dlgMsg').textContent = ''; dlg.showModal(); checkAz(); };
+$('optApi').onclick = () => doRefresh('api');
+$('optAz').onclick = () => doRefresh('az');
+$('dlgClose').onclick = () => dlg.close();
+dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+
 init();
 </script>
 </body>
