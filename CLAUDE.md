@@ -37,6 +37,9 @@ whether they are set. Check with e.g. `grep -c '^AZURE_API_KEY=.\+' .env`.
 - Stop: Ctrl+C, or `pkill -f "node server.mjs"`.
 - After editing `.env` or `server.mjs`, restart. Changes to `public/index.html` only need a browser refresh.
 - If the user wants to see it, run the server in the background and `open http://localhost:3000`.
+- Mac launcher: `bash scripts/make-mac-app.sh` builds `~/Applications/Scrummaster.app` (starts the server if needed, logs to
+  `~/Library/Logs/Scrummaster.log`, opens the installed Chrome app window or a Chrome `--app` window). The page is installable
+  as a Chrome/Edge app via `public/manifest.webmanifest` + icons; extra files in `public/` are only served if listed in `STATIC_FILES` in `server.mjs`.
 
 ## Environment variables
 
@@ -51,6 +54,7 @@ whether they are set. Check with e.g. `grep -c '^AZURE_API_KEY=.\+' .env`.
 | `ALLOW_WRITE_TOOLS` | no | `true` lets the model use MCP tools that create/update/delete (create Jira issue, update Confluence page, notes). Default `false` = read-only. Turn on only if the user asks, and say so clearly. |
 | `DATA_ZONE_MODELS` | no | Comma-separated deployments that are EU data-zone (SKU `DataZoneStandard`). Default list `DATA_ZONE_MODELS` in `server.mjs`. |
 | `REQUIRE_DATA_ZONE` | no | `true` hides/refuses models outside that list. Default `false` (shown with a ⚠ warning). |
+| `HIDE_MCP_TOOLS` | no | Comma-separated MCP tools the app doesn't offer the model. Default `add_note,complete_note,clear_notes,get_daily_briefing,add_running_note,search_running_notes` (the notes tools, replaced by the app's own to-dos); empty = show all. They stay in the MCP. |
 | `PORT` | no | Default 3000. |
 
 ### `mcp/jira-to-confluence/.env` (Atlassian/Tempo; read by the MCP itself)
@@ -73,9 +77,12 @@ browser (public/index.html)  ──HTTP/NDJSON──▶  server.mjs  ──▶ A
 ```
 - `server.mjs` — the whole backend (no framework). Sections: MCP connection, Azure model list, chat loop, HTTP routes.
   - `GET /api/status`, `GET /api/models`, `GET /api/tools`, `POST /api/chat` (streams newline-delimited JSON events:
-    `tool_call`, `tool_result`, `notice`, `message`, `error`).
+    `tool_call`, `confirm`, `tool_result`, `todos_changed`, `notice`, `message`, `error`), `POST /api/confirm`,
+    `GET /api/todos`, `POST /api/todos/done {id, done}`.
   - Listens on 127.0.0.1 only and rejects foreign Host/Origin headers. There is no login — keep it local.
 - `public/index.html` — the whole UI (CSS + JS inline). Chat history lives in the browser tab only.
+  Colours are Helsinki Design System tokens (https://hds.hel.fi/foundation/design-tokens/colour/), defined once as CSS variables in `:root`
+  with the HDS token name in a comment. Use those variables, not new hex values. HDS has no dark theme; the dark block uses HDS grayscale/brand colours.
 - `mcp/jira-to-confluence/` — third-party, **unofficial** MCP ([annadruid/jira-to-confluence](https://github.com/annadruid/jira-to-confluence)),
   git-ignored. Don't edit it for app features; treat it as a dependency. It is Finnish/hel.fi-specific (e.g. `UHF-` project, Finnish tool descriptions).
 
@@ -100,16 +107,47 @@ browser (public/index.html)  ──HTTP/NDJSON──▶  server.mjs  ──▶ A
   with `tool_calls` → the server runs each via `mcp.callTool` → results are appended as `role: "tool"` messages → repeat, at most
   `MAX_TOOL_ROUNDS` (8), then a final answer. Tool results are truncated to 30,000 chars.
 - **Safety default:** only MCP tools with `readOnlyHint: true` are exposed unless `ALLOW_WRITE_TOOLS=true`.
+- **Approvals:** with write tools on, any tool without `readOnlyHint: true` pauses the chat loop: the server emits a `confirm` event
+  (`id`, `name`, `description`, `args`), the UI shows an Allow/Cancel card, and the browser answers with `POST /api/confirm {id, allow}`.
+  No answer within 10 min, or the browser closing, counts as Cancel; a cancelled call is reported to the model as declined. Keep this.
 - **Errors/retries:** 429/5xx/network failures are retried 3× with backoff; other Azure errors surface in the UI as `Azure <status>: <message>`.
   Diagnose 401/403 → key; 404 → deployment name/endpoint; 400 → model capabilities; 429 → quota.
 - Never log keys or full prompts.
 
 ## How to add features (recipes)
+- **App's own tools (`LOCAL_TOOLS` in `server.mjs`):** besides the to-do tools: `get_closed_sprints` (board `BOARD_ID`, latest closed
+  sprints), `find_sprint_report_pages` (children of `PARENT_PAGE_ID` whose title has the sprint number) — both read-only, using the
+  Atlassian settings from the MCP's `.env` (this folder's `.env` wins) — and `update_quarter_pages` (`write: true`: runs
+  `node updateQuarterPages.mjs <source> <target>` in the MCP folder via execFile, only with ALLOW_WRITE_TOOLS and after Allow).
+  Also: `get_next_sprint_info` (active + future sprints, next sprint number, Wed–Tue dates and max htp minus Finnish public holidays
+  and calendar "lähipäivä" events, plus the ready "ask for htp estimates" Slack message), `get_sprint_capacity` (runs
+  `getSprintCapacity.mjs`, feeding its three prompts via stdin; read-only), `preview_release_tickets` (`cloneReleaseTickets --dry-run`),
+  `clone_release_tickets` (write), `preview_sprint_tickets` + `clone_sprint_tickets` (write). `cloneSprintTickets.mjs` has no dry run
+  or duplicate check, so the app reads its `SOURCE_KEYS`, looks for the resulting titles in the sprint and refuses if any exist.
+  MCP scripts run through `runMcpScript()` (spawn, no shell, numeric args only, 15 min timeout).
+  A `write: true` local tool goes through the same Allow/Cancel step as MCP write tools. The sprint-day quick tasks
+  "Päivitä sprinttiraportti" (closed sprint → confirm → page → confirm → MCP `update_confluence_sprint_page`, same code as `npm run update`)
+  and "Päivitä kvartaalisivut" (asks source + target page) are step-by-step prompts in `PRESETS`. Chat history sent to the model holds
+  only visible text, so step prompts make the model repeat needed IDs in its questions.
+- **Copy buttons:** every assistant reply gets "Kopioi vastaus" and every code block "Kopioi" (`copyButton()` in `public/index.html`,
+  with an `execCommand('copy')` fallback). Preset prompts that produce a Slack/Teams message ask for it in a code block.
+- **Own to-dos from the chat:** the server has its own (non-MCP) tools `add_todo`, `list_todos`, `complete_todo` (`TODO_TOOLS` in `server.mjs`),
+  stored in `todos.json` (git-ignored; `{ id, text, added, doneOn }`). They need no Allow step (they only touch that file). Open items stay every day;
+  an item ticked done is shown that day and pruned once the date changes. The Today panel lists them after the weekday routine (dashed border).
+- **Today panel / weekday to-dos:** `TODOS` in `public/index.html` (`mon`…`sun`, plus `every` = checked on every weekday, used for meeting-based to-dos such as `BILLING_DAY` ("Hel.fi laskutus"); items are text or `{ text, hint, show }`; `show` uses the same rules as presets, e.g. `SPRINT_CHANGE_TOMORROW`). Ticks live in the
+  browser's localStorage under `todos:YYYY-MM-DD` (per day, per browser — fine for a single-user local app). Presets with a `show` rule are
+  listed under the day heading; presets without one stay in "Quick tasks". `TODOS` is the user's real routine (mon–fri), with sprint-timing rules `SPRINT_CHANGE_TOMORROW/TODAY/YESTERDAY/CHANGED_THIS_WEEK`.
+  `SPRINT_CHANGE` (shared regex) = the meetings held on sprint-change day (sprint planning, demo, Dev+UX planning, Devin retro); keep the user's
+  Finnish to-do wording (only fix obvious typos).
+- **Quick tasks that follow the calendar/weekday:** each `PRESETS` entry can have `show: [{ days, meeting, workdaysBefore, workdaysAfter }]` (numbers or lists) (any rule
+  matching shows it; no `show` = always) and `{meeting} {time} {day} {week} {prevMonth} {prevMonthName}` placeholders (prevMonth = the month before the meeting, `YYYY-MM`; used by the billing-summary task). Meetings come from `GET /api/calendar` =
+  `calendar.json` (git-ignored; title/start/end/allDay only), written by `scripts/save-calendar.mjs` from Google Calendar `list_events`
+  output. The Claude scheduled task `scrummaster-calendar-refresh` (daily 07:00, past 7 + next 14 days, needs Claude Desktop open) does the fetch with Claude's
+  Google Calendar connector; the app itself has no Google access. `?today=YYYY-MM-DD` previews another day.
 - **New example button:** add an object to `PRESETS` at the top of the `<script>` in `public/index.html`
   (`label`, `hint`, `prompt`). The prompt is just a message sent to the assistant.
-- **Change the "Retrieve ticket" behaviour:** edit `ticketPrompt` in `public/index.html`. It currently asks the model to fetch the
-  ticket (the MCP's `get_jira_issue` tool) and summarize it.
-- **Change tone/rules/language of answers:** edit `SYSTEM_PROMPT` in `server.mjs`.
+- **Change tone/rules/language of answers:** edit `SYSTEM_PROMPT` in `server.mjs`. Its key rule (the user asked for it): ready-made tool
+  output (refinement lists, reports…) is shown exactly as the MCP returns it — no translating, summarising or reformatting unless asked.
 - **A new input in the sidebar (e.g. sprint ID, date range):** add the HTML in `<aside>`, a small JS handler that builds a prompt string and calls `send(prompt)`. The model figures out which tool to call from the MCP tool descriptions.
 - **Use a new/different MCP tool:** nothing to wire — tools are discovered automatically. Check `GET /api/tools` or the "Tools available" list in the sidebar. If it writes data, it needs `ALLOW_WRITE_TOOLS=true`.
 - **Add another MCP server (e.g. official Atlassian one):** `connectMcp()` currently manages one client. Generalise it to a list of clients, prefix tool names with the server name to avoid clashes, and route `callTool` by prefix.
@@ -118,6 +156,9 @@ browser (public/index.html)  ──HTTP/NDJSON──▶  server.mjs  ──▶ A
 - **Streaming token-by-token, saved conversations, file uploads:** not implemented; possible but would add complexity — confirm with the user first.
 
 ## Conventions
+- **Language:** the user uses the app in Finnish. Everything visible in the UI (labels, hints, quick-task prompts, messages, to-do
+  tool results) is Finnish; code, comments and docs stay English. `SYSTEM_PROMPT` tells the model to answer in Finnish unless the user
+  writes in another language. Write new UI text and preset prompts in Finnish.
 - Keep it plain: Node ≥ 22 ES modules, built-ins + `@modelcontextprotocol/sdk` + `dotenv` only. Avoid new dependencies unless they clearly pay off.
 - Keep secrets out of code, logs, UI and git. Don't read or print `.env` files in full.
 - Don't expose the server beyond localhost or add write tools without telling the user.

@@ -12,10 +12,21 @@ It is meant as a **template**: a simple, working starting point that you extend 
 - Chat interface with Markdown answers; tool calls are shown inline (click to see the raw output)
 - **Model selector** filled from the Azure deployments (looked up with just the API key; premade list as fallback)
 - **Reasoning level selector** (Default / Minimal / Low / Medium / High; ignored automatically by models that don't support it)
-- **Quick-task buttons** with predefined prompts
-- **Ticket field** with a "Retrieve" example button
+- **Today panel:** the weekday and date, a to-do list for that weekday (ticks are remembered per day), and the quick tasks for that day
+- **Your own to-dos from the chat:** "add a todo: book the retro room" adds it to the Today list. It stays there day after day
+  until you tick it (or say "mark … done"); ticked items disappear when the day changes. Saved in `todos.json` (not in git)
+- **Finnish interface:** all buttons, quick tasks and replies are in Finnish (the code is in English)
+- **Quick-task buttons** that follow the weekday and your calendar (e.g. "Prepare sprint changeover" the working day before the retro)
+- **Sprint change day helpers:** "Päivitä sprinttiraportti" finds the sprint that just closed and its Confluence page and asks you
+  to confirm both before updating (same as `npm run update`); "Päivitä kvartaalisivut" asks for the two page IDs or links and runs
+  `npm run updateQuarterPages`. Both need `ALLOW_WRITE_TOOLS=true` and your Allow click
+- **Monday and sprint-change helpers:** hours check Tempo vs. Severa with a ready Slack confirmation; the "ask for htp estimates"
+  message with the next sprint's number, dates and max person-days; recurring meeting/release tickets for the new sprint (preview
+  first, never duplicates); the capacity estimate for Aleksi (`npm run getSprintCapacity`); the Teams message for sharing the sprint report
+- **Copy buttons** on replies and on every code block, for pasting into Slack or Teams
 - **GDPR flag:** each model is marked "EU data zone" or "not confirmed EU" (global deployments may process data outside the EU)
-- Read-only by default: the model can only use MCP tools that read data
+- Read-only by default: the model can only use MCP tools that read data. With write tools on, every change
+  (create/update/delete) pauses with an **Allow / Cancel** card showing exactly what will be sent
 
 ## Easiest way to get started: let Claude set it up
 
@@ -65,6 +76,24 @@ npm start        # http://localhost:3000
 If the header shows "MCP offline", run `cd mcp/jira-to-confluence && node server.mjs` to see the real error
 (usually a missing variable).
 
+## Run it like a Mac app
+
+Once setup works, you can start it without a terminal:
+
+1. **Build the launcher** (once, and again if you move this folder):
+   ```bash
+   bash scripts/make-mac-app.sh
+   ```
+   This creates `~/Applications/Scrummaster.app`. Open it from Spotlight (Cmd+Space → "Scrummaster")
+   or drag it to the Dock. Clicking it starts the server in the background if needed and opens the assistant.
+   Server output goes to `~/Library/Logs/Scrummaster.log`.
+2. **Give it its own window** (optional, Chrome or Edge): in the window that opens, click the install icon
+   at the right end of the address bar, or ⋮ → *Cast, save and share* → *Install page as app*. From then on the
+   launcher opens that app window, with its own icon in the Dock and in Cmd+Tab.
+
+Closing the window leaves the server running in the background (it uses next to nothing while idle).
+To stop it: `pkill -f "node server.mjs"`. It is still only reachable from your own laptop.
+
 ## Configuration (`.env` in this folder)
 
 | Variable | Needed | Meaning |
@@ -74,19 +103,32 @@ If the header shows "MCP offline", run `cd mcp/jira-to-confluence && node server
 | `DEFAULT_MODEL` | no | Deployment preselected in the dropdown (default `gpt-5-mini`) |
 | `AZURE_MODELS` | no | Fixed comma-separated model list instead of the live lookup |
 | `JIRA_MCP_DIR` | no | Where the MCP lives (default `./mcp/jira-to-confluence`) |
-| `ALLOW_WRITE_TOOLS` | no | `true` lets the model create/update things (Jira issues, Confluence pages, notes). Default `false` |
+| `ALLOW_WRITE_TOOLS` | no | `true` lets the model create/update things (Jira issues, Confluence pages, notes); each one asks you to Allow it first. Default `false` |
 | `DATA_ZONE_MODELS` | no | Deployments that run in the EU data zone (default list in `server.mjs`) |
 | `REQUIRE_DATA_ZONE` | no | `true` hides and refuses all models not in that list (GDPR). Default `false` = they are shown with a warning |
+| `HIDE_MCP_TOOLS` | no | MCP tools left out of the chat. Default: the notes tools (`add_note`, `complete_note`, `clear_notes`, `get_daily_briefing`, `add_running_note`, `search_running_notes`), since to-dos are handled by the app |
 | `PORT` | no | Default 3000 |
 
 ## Customising
 
 | Want to… | Edit |
 |---|---|
-| Add/change example buttons | `PRESETS` at the top of the `<script>` in `public/index.html` |
-| Change what "Retrieve" asks | `ticketPrompt` in `public/index.html` |
+| Change the to-do list for each weekday | `TODOS` at the top of the `<script>` in `public/index.html` (items can have a `show` rule, e.g. only before a sprint change; `every` holds to-dos checked on any weekday, such as the billing-day ones) |
+| Add/change quick-task buttons, and when they show | `PRESETS` at the top of the `<script>` in `public/index.html` (rules: `days`, `meeting`, `workdaysBefore`, `workdaysAfter`; explained in the comment above it) |
 | Change the assistant's behaviour/language | `SYSTEM_PROMPT` in `server.mjs` |
 | Fixed model list / fallback list | `AZURE_MODELS` in `.env`, or `FALLBACK_MODELS` in `server.mjs` |
+
+## Calendar-based quick tasks
+
+Some quick tasks only appear on certain weekdays or around certain meetings. The meetings come from `calendar.json`
+(git-ignored, only meeting titles and times), which a Claude Desktop scheduled task, **"Scrummaster: päivitä kalenteri"**,
+refreshes every morning at 07:00 with the past week and the next two weeks, using Claude's Google Calendar connector:
+
+- The task only runs while Claude Desktop is open; if it was closed at 07:00 it runs when you next open it.
+  The sidebar shows when the calendar was last updated and turns orange if it is more than 36 hours old.
+- Without `calendar.json` the app still works; only the weekday and always-on tasks are shown.
+- To fill it by hand: open the task in Claude Desktop (Scheduled in the sidebar) and click *Run now*.
+- To preview another day: open `http://localhost:3000/?today=2026-11-16`.
 
 ## How it works
 

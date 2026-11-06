@@ -1,44 +1,92 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fi">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Scrummaster Assistant</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-512.png">
+<meta name="theme-color" content="#0072c6">
 <style>
+  /* Colours: Helsinki Design System tokens (https://hds.hel.fi/foundation/design-tokens/colour/).
+     The HDS token name is in the comment after each value. */
   :root {
-    --bg: #0f1117; --panel: #171a23; --panel2: #1e222e; --border: #2a2f3d;
-    --text: #e6e8ee; --muted: #8b91a3; --accent: #7c8cff; --accent2: #a78bfa;
-    --ok: #4ade80; --err: #f87171; --radius: 14px;
+    --bg: #f2f2f2;          /* black-5 */
+    --panel: #ffffff;       /* white */
+    --panel2: #f7f7f8;      /* silver-light */
+    --border: #dedfe1;      /* silver */
+    --text: #1a1a1a;        /* black-90 */
+    --muted: #595959;       /* black-60 (AA contrast on white) */
+    --accent: #0072c6;      /* coat-of-arms: buttons, user messages, highlights */
+    --accent-hover: #005799;/* coat-of-arms-dark */
+    --accent-soft: #e6f4ff; /* coat-of-arms-light */
+    --on-accent: #ffffff;   /* text on accent */
+    --link: #0072c6;        /* coat-of-arms */
+    --ok: #007a64;          /* success */
+    --ok-soft: #e2f5f3;     /* success-light */
+    --err: #b01038;         /* error */
+    --err-soft: #f6e2e6;    /* error-light */
+    --warn: #c27900;        /* alert-dark (alert #ffda07 is too light for text/borders) */
+    --warn-soft: #fff4b4;   /* alert-light */
+    --radius: 14px;
   }
-  @media (prefers-color-scheme: light) {
-    :root { --bg: #f5f6fa; --panel: #ffffff; --panel2: #eef0f6; --border: #dde1ec; --text: #1a1d29; --muted: #6a7087; --accent: #4f5df0; --accent2: #7c3aed; }
+  /* HDS has no dark theme: this uses the HDS grayscale + brand colours that keep AA contrast on dark. */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a1a;          /* black-90 */
+      --panel: #333333;       /* black-80 */
+      --panel2: #4d4d4d;      /* black-70 */
+      --border: #595959;      /* black-60 */
+      --text: #f2f2f2;        /* black-5 */
+      --muted: #cccccc;       /* black-20 (black-30 would be too faint on the lighter cards) */
+      --accent-soft: #00005e; /* bus-dark */
+      --link: #9fc9eb;        /* fog */
+      --ok: #00d7a7;          /* copper */
+      --ok-soft: #006250;     /* success-dark */
+      --err: #facbc8;         /* brick-medium-light */
+      --err-soft: #800e04;    /* brick-dark */
+      --warn: #ffc61e;        /* summer */
+      --warn-soft: #4d3b00;   /* (summer at 30% on black - no exact HDS token) */
+    }
   }
   * { box-sizing: border-box; }
   body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text);
          font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
   header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
   .brand { font-weight: 700; font-size: 17px; display: flex; align-items: center; gap: 10px; margin-right: auto; }
-  .logo { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: grid; place-items: center; color: #fff; font-size: 15px; }
+  .logo { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; color: var(--on-accent); font-size: 15px; }
   .ctl { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
   select, input, textarea, button { font: inherit; color: inherit; }
-  select, input.ticket { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 7px 10px; outline: none; text-transform: none; letter-spacing: 0; font-size: 14px; }
+  select { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 7px 10px; outline: none; text-transform: none; letter-spacing: 0; font-size: 14px; }
   select:focus, input:focus, textarea:focus { border-color: var(--accent); }
   .zone { padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; }
-  .zone.eu { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); border: 1px solid var(--ok); }
-  .zone.warn { background: color-mix(in srgb, #f59e0b 20%, transparent); color: #f59e0b; border: 1px solid #f59e0b; }
+  .zone.eu { background: var(--ok-soft); color: var(--ok); border: 1px solid var(--ok); }
+  .zone.warn { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn); }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); display: inline-block; }
   .dot.ok { background: var(--ok); } .dot.bad { background: var(--err); }
   .layout { flex: 1; display: flex; min-height: 0; }
   aside { width: 270px; padding: 18px; border-right: 1px solid var(--border); background: var(--panel); overflow-y: auto; display: flex; flex-direction: column; gap: 22px; }
   aside h3 { margin: 0 0 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
-  .ticket-row { display: flex; gap: 8px; }
-  .ticket-row input { flex: 1; min-width: 0; text-transform: uppercase; }
-  button.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: 0; border-radius: 10px; padding: 8px 14px; cursor: pointer; font-weight: 600; }
-  button.primary:hover { filter: brightness(1.1); } button:disabled { opacity: .5; cursor: not-allowed; }
+  button.primary { background: var(--accent); color: var(--on-accent); border: 0; border-radius: 10px; padding: 8px 14px; cursor: pointer; font-weight: 600; }
+  button.primary:hover { background: var(--accent-hover); } button:disabled { opacity: .5; cursor: not-allowed; }
   .presets { display: flex; flex-direction: column; gap: 8px; }
   .preset { text-align: left; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; cursor: pointer; transition: .15s; }
   .preset:hover { border-color: var(--accent); transform: translateX(2px); }
   .preset small { display: block; color: var(--muted); font-size: 12px; }
+  .preset.timely { border-left: 3px solid var(--accent); }
+  .day-title { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 10px; }
+  .day-title b { font-size: 17px; } .day-title span { color: var(--muted); font-size: 13px; }
+  .day-sub { display: flex; justify-content: space-between; margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .todos { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .todo { display: flex; gap: 9px; align-items: flex-start; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 8px 11px; cursor: pointer; font-size: 13.5px; line-height: 1.35; }
+  .todo:hover { border-color: var(--accent); } .todo.timely { border-left: 3px solid var(--accent); }
+  .todo input { margin: 2px 0 0; accent-color: var(--accent); flex: none; cursor: pointer; }
+  .todo.own { border-style: dashed; } /* your own to-dos added from the chat */
+  .todo.done span { text-decoration: line-through; color: var(--muted); }
+  .todo small { display: block; color: var(--muted); font-size: 12px; text-decoration: none; }
+  .none { color: var(--muted); font-size: 13px; }
+  .cal-status { margin-top: 10px; font-size: 11px; color: var(--muted); } .cal-status.stale { color: var(--warn); }
   .tools-list { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 5px; }
   .tools-list span { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px; font-family: ui-monospace, Menlo, monospace; }
   main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -46,23 +94,32 @@
   .empty { margin: auto; text-align: center; color: var(--muted); max-width: 420px; }
   .empty .logo { width: 56px; height: 56px; font-size: 28px; margin: 0 auto 14px; border-radius: 16px; }
   .msg { max-width: 820px; width: fit-content; padding: 12px 16px; border-radius: var(--radius); overflow-wrap: anywhere; }
-  .msg.user { align-self: flex-end; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; white-space: pre-wrap; border-bottom-right-radius: 4px; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: var(--on-accent); white-space: pre-wrap; border-bottom-right-radius: 4px; }
   .msg.assistant { align-self: flex-start; background: var(--panel); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
-  .msg.error { align-self: flex-start; background: color-mix(in srgb, var(--err) 15%, var(--panel)); border: 1px solid var(--err); }
+  .msg.error { align-self: flex-start; background: var(--err-soft); border: 1px solid var(--err); }
   .msg.notice { align-self: center; color: var(--muted); font-size: 13px; padding: 2px 10px; }
   .msg.assistant > :first-child { margin-top: 0; } .msg.assistant > :last-child { margin-bottom: 0; }
   .msg p { margin: .5em 0; } .msg ul, .msg ol { padding-left: 1.4em; margin: .5em 0; }
-  .msg a { color: var(--accent); } .msg h1, .msg h2, .msg h3 { margin: .8em 0 .3em; line-height: 1.25; }
+  .msg a { color: var(--link); } .msg h1, .msg h2, .msg h3 { margin: .8em 0 .3em; line-height: 1.25; }
   .msg h1 { font-size: 1.25em; } .msg h2 { font-size: 1.12em; } .msg h3 { font-size: 1em; }
   .msg code { background: var(--panel2); padding: 1px 5px; border-radius: 5px; font-size: .9em; font-family: ui-monospace, Menlo, monospace; }
   .msg pre { background: var(--panel2); padding: 12px; border-radius: 10px; overflow-x: auto; } .msg pre code { background: none; padding: 0; }
   .msg table { border-collapse: collapse; margin: .6em 0; display: block; overflow-x: auto; }
   .msg th, .msg td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; } .msg th { background: var(--panel2); }
-  .meta { margin-top: 8px; font-size: 11px; color: var(--muted); }
+  .meta { margin-top: 8px; font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: center; }
+  .copy { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px; font-size: 11px; color: var(--muted); cursor: pointer; }
+  .copy:hover { color: var(--text); border-color: var(--accent); }
+  .msg pre { position: relative; } .msg pre .copy { position: absolute; top: 6px; right: 6px; background: var(--panel); }
   details.tool { align-self: flex-start; max-width: 820px; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 6px 12px; font-size: 13px; }
   details.tool summary { cursor: pointer; color: var(--muted); list-style: none; display: flex; gap: 8px; align-items: center; }
   details.tool summary::before { content: "▸"; } details.tool[open] summary::before { content: "▾"; }
-  details.tool pre { margin: 8px 0 2px; white-space: pre-wrap; max-height: 260px; overflow: auto; font-size: 12px; font-family: ui-monospace, Menlo, monospace; }
+  details.tool pre { margin: 8px 0 2px; white-space: pre-wrap; word-break: break-word; font-size: 12px; font-family: ui-monospace, Menlo, monospace; }
+  .confirm { align-self: flex-start; max-width: 820px; background: var(--warn-soft); border: 1px solid var(--warn); border-radius: var(--radius); padding: 12px 16px; font-size: 14px; }
+  .confirm h4 { margin: 0 0 4px; font-size: 14px; } .confirm .desc { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+  .confirm table { border-collapse: collapse; font-size: 13px; margin-bottom: 10px; }
+  .confirm td { border-top: 1px solid var(--border); padding: 4px 10px 4px 0; vertical-align: top; white-space: pre-wrap; word-break: break-word; }
+  .confirm td:first-child { color: var(--muted); white-space: nowrap; }
+  .confirm .actions { display: flex; gap: 8px; align-items: center; } .confirm .answer { font-weight: 600; }
   .spin { width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: s .7s linear infinite; }
   @keyframes s { to { transform: rotate(360deg); } }
   .typing { align-self: flex-start; color: var(--muted); display: flex; gap: 8px; align-items: center; font-size: 13px; }
@@ -71,66 +128,199 @@
   form#composer button { padding: 12px 20px; border-radius: var(--radius); }
   .ghost { background: none; border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; cursor: pointer; color: var(--muted); }
   .ghost:hover { color: var(--text); border-color: var(--accent); }
-  #banner { display: none; background: color-mix(in srgb, #f59e0b 18%, var(--panel)); border-bottom: 1px solid #f59e0b; padding: 8px 20px; font-size: 13px; }
+  #banner { display: none; background: var(--warn-soft); border-bottom: 1px solid var(--warn); padding: 8px 20px; font-size: 13px; }
   @media (max-width: 800px) { aside { display: none; } }
 </style>
 </head>
 <body>
 <header>
   <div class="brand"><span class="logo">✦</span> Scrummaster Assistant</div>
-  <label class="ctl">Model <select id="model"><option>loading…</option></select></label>
-  <label class="ctl">Reasoning
+  <label class="ctl">Malli <select id="model"><option>ladataan…</option></select></label>
+  <label class="ctl">Päättely
     <select id="effort">
-      <option value="default">Default</option>
-      <option value="minimal">Minimal</option>
-      <option value="low">Low</option>
-      <option value="medium">Medium</option>
-      <option value="high">High</option>
+      <option value="default">Oletus</option>
+      <option value="minimal">Minimaalinen</option>
+      <option value="low">Matala</option>
+      <option value="medium">Keskitaso</option>
+      <option value="high">Korkea</option>
     </select>
   </label>
   <span class="ctl" id="zone" title=""></span>
-  <span class="ctl" title="Atlassian MCP connection"><span id="mcpDot" class="dot"></span><span id="mcpText">MCP</span></span>
-  <button class="ghost" id="clear">New chat</button>
+  <span class="ctl" title="Atlassian MCP -yhteys"><span id="mcpDot" class="dot"></span><span id="mcpText">MCP</span></span>
+  <button class="ghost" id="clear">Uusi keskustelu</button>
 </header>
 <div id="banner"></div>
 <div class="layout">
   <aside>
     <section>
-      <h3>Look up a ticket</h3>
-      <div class="ticket-row">
-        <input class="ticket" id="ticketId" placeholder="UHF-1234" maxlength="20" autocomplete="off">
-        <button class="primary" id="retrieve">Retrieve</button>
-      </div>
+      <div class="day-title"><b id="dayName"></b><span id="dayDate"></span></div>
+      <div class="day-sub"><span>Tänään tehtävää</span><span id="todoCount"></span></div>
+      <div class="todos" id="todos"></div>
+      <div class="day-sub"><span>Päivän pikatehtävät</span></div>
+      <div class="presets" id="dayPresets"></div>
+      <div class="cal-status" id="calStatus"></div>
     </section>
     <section>
-      <h3>Quick tasks</h3>
+      <h3>Pikatehtävät</h3>
       <div class="presets" id="presets"></div>
     </section>
     <section>
-      <h3>Tools available</h3>
+      <h3>Käytössä olevat työkalut</h3>
       <div class="tools-list" id="tools"></div>
     </section>
   </aside>
   <main>
     <div id="log"></div>
     <form id="composer">
-      <textarea id="input" rows="1" placeholder="Ask about tickets, sprints, refinement, hours…  (Enter to send, Shift+Enter for newline)"></textarea>
-      <button class="primary" id="send" type="submit">Send</button>
+      <textarea id="input" rows="1"></textarea>
+      <button class="primary" id="send" type="submit">Lähetä</button>
     </form>
   </main>
 </div>
 
 <script>
-// ─── EDIT ME: example buttons. `prompt` is sent to the assistant as-is. ───
+// ─── EDIT ME: quick-task buttons. `prompt` is sent to the assistant as-is. ───
+// `show` says WHEN a button appears. Leave it out and the button is always there. It is a list of rules;
+// the button shows if ANY rule matches. A rule can have:
+//   days: ['mon', 'fri']     on these weekdays (mon tue wed thu fri sat sun)
+//   meeting: /retro/i        a meeting whose title matches this pattern (i = ignore upper/lower case) ...
+//   workdaysBefore: 1        ... is this many working days ahead. 0 or left out = today, 1 = the working day before
+//                            (a Tuesday meeting shows on Monday, a Monday meeting shows on Friday).
+//   workdaysAfter: 1         ... was this many working days ago (1 = the working day after the meeting).
+//                            Both also take a list, e.g. workdaysAfter: [1, 2, 3, 4] = any of those days.
+// In `hint` and `prompt` you can use {meeting}, {time} and {day} (from the matched meeting) and
+// {week} (all meetings in the next 5 working days), {prevMonth} / {prevMonthName} (the month before the meeting,
+// e.g. 2026-11 / marraskuu 2026 for a meeting on 1.12.). Meetings come from calendar.json, which a Claude
+// scheduled task refreshes every morning with the past week and the next two weeks.
+// ─── Shared meeting patterns (used by both to-dos and quick tasks) ───
+// Sprint changes on the day these meetings are held (sprint planning, demo, Dev+UX planning, retro).
+const SPRINT_CHANGE = /sprint\s*planning|dev\s*\+\s*ux\s*-?\s*planning|sprintin demon|\bdemo\b|devin retro/i;
+
+// ─── EDIT ME: recurring to-dos for each weekday (shown at the top of the sidebar). ───
+// Each item is either just text, or { text, hint, show }:
+//   hint  a smaller second line
+//   show  the same rules as quick tasks below (e.g. only when the sprint changes the next working day).
+//         Leave it out and the to-do is there every time that weekday comes round.
+// Ticks are remembered for that date only, so every day starts with a fresh list.
+// Sprint-change timing, used by the to-dos below:
+const SPRINT_CHANGE_TOMORROW  = [{ meeting: SPRINT_CHANGE, workdaysBefore: 1 }];           // the working day before
+const SPRINT_CHANGE_TODAY     = [{ meeting: SPRINT_CHANGE }];                              // the day itself
+const SPRINT_CHANGE_YESTERDAY = [{ meeting: SPRINT_CHANGE, workdaysAfter: 1 }];            // the working day after
+const SPRINT_CHANGED_THIS_WEEK = [{ meeting: SPRINT_CHANGE, workdaysAfter: [1, 2, 3, 4] }]; // changed since last week's same weekday
+// Billing day: the day of the "Hel.fi laskutus" meeting (any weekday).
+const BILLING_DAY = [{ meeting: /hel\.?fi laskutus/i }];
+const TODOS = {
+  // `every`: checked on every weekday (so these normally have a `show` rule).
+  every: [
+    { text: 'Tarkasta tunnit aamusta', show: BILLING_DAY },
+    { text: 'Laita Artolle laskutuserittelyt', show: BILLING_DAY },
+  ],
+  mon: [
+    'Tarkista tunnit',
+    // Only on the Monday before a sprint change (planning/demo/retro on Tuesday):
+    { text: 'Kysy htp-arviot', show: SPRINT_CHANGE_TOMORROW },
+    { text: 'Tee uusi sprinttiraporttipohja', show: SPRINT_CHANGE_TOMORROW },
+    { text: 'Laita Aleksille kapasiteettiarvio', show: SPRINT_CHANGE_TOMORROW },
+    { text: 'Luo retrosivut', show: SPRINT_CHANGE_TOMORROW },
+    { text: 'Luo uusi sprintti backlogille', show: SPRINT_CHANGE_TOMORROW },
+    { text: 'Varmista, että uuden sprintin aputaulukolla on tarvittavat tiketit', show: SPRINT_CHANGE_TOMORROW },
+  ],
+  tue: [
+    'Asioinnin e2e dailyssä',
+    // Only on sprint-change day:
+    { text: 'Koodikatselmustiketit', show: SPRINT_CHANGE_TODAY },
+    { text: 'Päivitä kvartaalisivut', show: SPRINT_CHANGE_TODAY },
+    { text: 'Päivitä sprinttiraportti', show: SPRINT_CHANGE_TODAY },
+    { text: 'Varmista #helfi_dev-kanavalla, että sprintin saa sulkea', show: SPRINT_CHANGE_TODAY },
+    { text: 'Siirrä palaveritiketit Doneen ennen sprintin sulkemista', show: SPRINT_CHANGE_TODAY },
+    { text: 'Siirrä toistuvat palaveritiketit In progressiin', hint: 'Kun uusi sprintti on käynnistetty', show: SPRINT_CHANGE_TODAY },
+  ],
+  wed: [
+    // Only on the day after the sprint change:
+    { text: 'Lähetä sprinttiraportti', hint: 'Teamsiin (edellinen postaus löytyy hakusanalla "sprinttiraportti")', show: SPRINT_CHANGE_YESTERDAY },
+  ],
+  thu: [
+    'Asioinnin e2e dailyssä',
+    // Only on the first Thursday after a sprint change:
+    { text: 'Kuka tekee rellut?', show: SPRINT_CHANGED_THIS_WEEK },
+  ],
+  fri: [
+    'Lähetä refinement-lista',
+  ],
+  sat: [], sun: [],
+};
+
 const PRESETS = [
-  { label: 'Refinement list',     hint: 'All tickets waiting for refinement', prompt: 'Get all refinement tickets and show them grouped by epic.' },
-  { label: 'Recent refinement',   hint: 'Created in the last 2 weeks',       prompt: 'Show refinement tickets created in the last 2 weeks.' },
-  { label: 'Current sprint pages', hint: 'Confluence sprint report links',    prompt: 'Give me links to the latest sprint report pages.' },
-  { label: 'Team process help',   hint: 'What to do on sprint changeover',   prompt: 'What do we need to do on the sprint changeover day?' },
-  { label: 'What can you do?',    hint: 'List tools and examples',           prompt: 'What tools do you have and what can I ask you?' },
+  // Weekday rules
+  { label: 'Tuleva viikko', hint: 'Suunnittele viikko palaverien pohjalta', show: [{ days: ['mon'] }],
+    prompt: 'Tässä ovat palaverini seuraavan 5 työpäivän ajalta:\n{week}\n\nAuta minua suunnittelemaan viikko Scrum Masterina: mitä minun pitää valmistella ja milloin, ja mitä Jira-tietoja kannattaa tarkistaa ennen mitäkin palaveria?' },
+  { label: 'Viikon yhteenveto', hint: 'Mitä tiimi sai valmiiksi', show: [{ days: ['fri'] }],
+    prompt: 'Tee yhteenveto siitä, mitä tiimi sai tällä viikolla valmiiksi Jirassa, ja tarkista, täsmäävätkö kirjatut tunnit.' },
+
+  { label: 'Tuntien tarkistus', hint: 'Tempo vs. Severa, viime viikko', show: [{ days: ['mon'] }],
+    prompt: 'Vertaa kehittäjien viime viikon tunnit Tempossa ja Severassa (check_hours_match, oletuksena viime viikon ma–pe) ja näytä tulos sellaisenaan. '
+      + 'Kirjoita sen perään koodilohkoon valmis Slack-viesti project management -kanavalle: jos kaikki täsmää, kuittaus muotoa '
+      + '"Kehittäjien tunnit <pv.kk.>–<pv.kk.> tarkistettu ✅" (käytä työkalun antamia päivämääriä); jos eroja on, lista kehittäjistä, joiden tunnit eivät täsmää, ja ero tunteina.' },
+
+  // Meeting rules: the working day before
+  { label: 'Valmistele sprintin vaihto', hint: 'Huomenna: {meeting} {time}', show: [{ meeting: SPRINT_CHANGE, workdaysBefore: 1 }],
+    prompt: 'Sprintti vaihtuu huomenna ({day}). Auta minua valmistautumaan: listaa nykyisen sprintin keskeneräiset tiketit, tarkista täsmäävätkö kirjatut tunnit, ja näytä kehittäjien tehokkuus tässä sprintissä.' },
+
+  { label: 'Pyydä htp-arviot', hint: 'Slack-viesti #helfi_dev-kanavalle', show: [{ meeting: SPRINT_CHANGE, workdaysBefore: 1 }],
+    prompt: 'Hae seuraavan sprintin tiedot (get_next_sprint_info). Näytä työkalun antama koodilohko (valmis viesti #helfi_dev-kanavalle) sellaisenaan, jotta voin kopioida sen. '
+      + 'Kerro sen alla yhdellä rivillä seuraavan sprintin päivät ja htp-määrä sekä mitkä päivät jätettiin laskematta (pyhät, lähipäivä).' },
+  { label: 'Luo toistuvat tiketit', hint: 'Palaveri- ja release-tiketit uudelle sprintille', show: [{ meeting: SPRINT_CHANGE, workdaysBefore: 1 }],
+    prompt: 'Haluan luoda uudelle sprintille toistuvat palaveri- ja release-tiketit (npm run cloneSprintTickets ja cloneReleaseTickets). Etene vaihe kerrallaan. '
+      + 'Jokainen kysymys päättää vastauksesi: älä kutsu seuraavan vaiheen työkaluja ennen kuin olen vastannut.\n'
+      + '1. Hae get_next_sprint_info ja ehdota tulevista sprinteistä sitä, jonka numero on seuraavan sprintin numero. Kysy: "Onko tämä oikea sprintti: <nimi> (sprint ID <id>, numero <numero>)?" Lopeta vastaus tähän.\n'
+      + '2. Kun vahvistan, aja preview_sprint_tickets ja preview_release_tickets ja näytä tulokset. Kysy: "Luodaanko puuttuvat tiketit sprintille <nimi> (sprint ID <id>, numero <numero>)?" Lopeta vastaus tähän.\n'
+      + '3. Kun vahvistan, kutsu clone_sprint_tickets vain jos esikatselussa oli luotavia (➕) tikettejä, ja clone_release_tickets vain jos release-esikatselussa oli luotavia tikettejä.' },
+  { label: 'Kapasiteettiarvio', hint: 'Alkavan sprintin pisteet Aleksille', show: [{ meeting: SPRINT_CHANGE, workdaysBefore: 1 }],
+    prompt: 'Haluan laskea alkavan sprintin kapasiteetin (npm run getSprintCapacity). Hae ensin viimeisin suljettu sprintti (get_closed_sprints) ja kysy minulta yhdellä kertaa: '
+      + '"Käytetäänkö laskennassa sprinttiä <nimi> (sprint ID <id>)? Paljonko ovat FE-kehittäjien ja BE-kehittäjien htp-arviot alkavalle sprintille yhteensä?" Lopeta vastaus tähän.\n'
+      + 'Kun vastaan, aja get_sprint_capacity ja näytä tulos sellaisenaan. Kirjoita sen perään koodilohkoon lyhyt viesti Aleksille ("Moi Aleksi! …") alkavan sprintin kapasiteettiarviosta (pisteet yhteensä, FE ja BE).' },
+
+  // Meeting rules: the same day
+  { label: 'Refinement-lista', hint: 'Tänään: {meeting} {time}', show: [{ meeting: /refinement/i }],
+    prompt: 'Hae kaikki refinement-tiketit ja näytä ne epiikeittäin ryhmiteltyinä.' },
+  { label: 'Uusimmat refinement-tiketit', hint: 'Luotu viimeisen 2 viikon aikana', show: [{ days: ['thu', 'fri'] }, { meeting: /refinement/i }],
+    prompt: 'Näytä viimeisen 2 viikon aikana luodut refinement-tiketit (get_refinement_recent).' },
+  { label: 'Sprintin vaihdon tarkistuslista', hint: 'Tänään: {meeting} {time}', show: [{ meeting: SPRINT_CHANGE }],
+    prompt: 'Mitä sprintin vaihtopäivänä pitää tehdä? Anna minulle tarkistuslista.' },
+  // These two walk through the npm scripts step by step in the chat (asking for confirmation / page IDs first).
+  { label: 'Päivitä sprinttiraportti', hint: 'Päättyneen sprintin Confluence-sivu', show: [{ meeting: SPRINT_CHANGE }],
+    prompt: 'Haluan päivittää päättyneen sprintin sprinttiraporttisivun Confluencessa (sama kuin npm run update). Etene vaihe kerrallaan. '
+      + 'Jokainen kysymys päättää vastauksesi: älä kutsu seuraavan vaiheen työkalua ennen kuin olen vastannut.\n'
+      + '1. Hae viimeisin suljettu sprintti (get_closed_sprints) ja kysy: "Onko tämä oikea sprintti: <sprintin nimi> (sprint ID <id>)?" Lopeta vastaus tähän.\n'
+      + '2. Kun vahvistan, etsi sprinttisivu sprintin numerolla (find_sprint_report_pages). Sivun otsikossa pitää olla sama sprintin numero. '
+      + 'Kysy: "Onko tämä oikea sivu: <sivun otsikko> (page ID <id>, linkki)? Päivitän sen sprintin <nimi> (sprint ID <id>) tiedoilla." Lopeta vastaus tähän.\n'
+      + '3. Vasta kun vahvistan sivun, kutsu update_confluence_sprint_page parametreilla sprint_id = sprintin ID ja page_id = sivun ID.\n'
+      + 'Jos vastaan "ei", kysy minulta oikea sprintti tai sivu (ID tai linkki) ennen kuin jatkat.' },
+  { label: 'Päivitä kvartaalisivut', hint: 'Kvartaalipisteet ja piirakkakaaviot', show: [{ meeting: SPRINT_CHANGE }],
+    prompt: 'Haluan päivittää kvartaalisivut Confluencessa (sama kuin npm run updateQuarterPages). Kysy minulta ensin:\n'
+      + '1. lähdesivu (epiikkikatsaus, jossa kvartaalipisteet): sivun ID tai linkki\n'
+      + '2. kohdesivu (piirakkakaaviosivu): sivun ID tai linkki\n'
+      + 'Odota vastaustani. Jos annan linkin, poimi sivun ID linkistä (numero /pages/ jälkeen). Kun molemmat ovat tiedossa, aja update_quarter_pages.' },
+  // The working day after the sprint change
+  { label: 'Sprinttiraportin jakoviesti', hint: 'Teams-viesti raportin linkillä', show: [{ meeting: SPRINT_CHANGE, workdaysAfter: 1 }],
+    prompt: 'Hae viimeisin suljettu sprintti (get_closed_sprints) ja sen sprinttiraporttisivu (find_sprint_report_pages). Kirjoita lyhyt, ystävällinen Teams-viesti, '
+      + 'jolla jaan sprintin <nimi> raportin, ja laita sivun linkki mukaan. Näytä viesti koodilohkossa, jotta voin kopioida sen.' },
+  { label: 'Sprintin vaihdon Slack-viesti', hint: 'Excelin luvuista (get_slack_message)', show: [{ meeting: SPRINT_CHANGE, workdaysAfter: 1 }],
+    prompt: 'Generoi sprintin vaihdon Slack-viesti (get_slack_message) ja näytä se sellaisenaan koodilohkossa, jotta voin kopioida sen.' },
+  { label: 'Luo sprinttisivu', hint: 'Confluence-sivu uudelle sprintille', show: [{ meeting: SPRINT_CHANGE }],
+    prompt: 'Luo Confluence-sprinttisivu uudelle sprintille.' },
+  { label: 'Laskutuksen yhteenveto', hint: 'Tänään: {meeting} {time} · {prevMonthName}', show: BILLING_DAY,
+    prompt: 'Anna minulle laskutuksen yhteenveto kuukaudelta {prevMonthName} (get_billing_summary, month: {prevMonth}).' },
+  { label: 'Kirjatut tunnit', hint: 'Tänään: {meeting} {time}', show: [{ meeting: /resourcing/i }],
+    prompt: 'Näytä nykyisen sprintin kirjatut tunnit kehittäjittäin.' },
+  { label: 'Backlogin katsaus', hint: 'Tänään: {meeting} {time}', show: [{ meeting: /backlogin tarkastelu|backlog/i }],
+    prompt: 'Anna katsaus backlogiin: vanhimmat tiketit, tiketit ilman epiikkiä ja korkean prioriteetin tiketit.' },
+
+  // Always
+  { label: 'Nykyiset sprinttisivut', hint: 'Linkit Confluencen sprinttiraportteihin', prompt: 'Anna linkit uusimpiin sprinttiraporttisivuihin.' },
+  { label: 'Tiimin prosessi', hint: 'Miten prosessimme toimii', prompt: 'Selitä tiimimme prosessi: mitä tapahtuu sprintin minäkin päivänä?' },
+  { label: 'Mitä osaat?', hint: 'Työkalut ja esimerkkejä', prompt: 'Mitä työkaluja sinulla on ja mitä voin kysyä sinulta?' },
 ];
-// Ticket button prompt. Change it to fetch whatever you need.
-const ticketPrompt = (id) => `Retrieve ticket ${id} and summarize it: status, assignee, epic, story points and what is left to do.`;
 
 // ─── App ───
 const $ = (id) => document.getElementById(id);
@@ -139,10 +329,10 @@ let history = [], busy = false, modelInfo = {};
 function updateZone() {
   const m = modelInfo[$('model').value]; const z = $('zone');
   if (!m) { z.className = 'ctl'; z.textContent = ''; return; }
-  $('model').style.borderColor = m.dataZone ? 'var(--ok)' : '#f59e0b';
+  $('model').style.borderColor = m.dataZone ? 'var(--ok)' : 'var(--warn)';
   z.className = 'ctl zone ' + (m.dataZone ? 'eu' : 'warn');
-  z.textContent = m.dataZone ? '🇪🇺 EU data zone' : '⚠ not confirmed EU';
-  z.title = m.dataZone ? 'DataZoneStandard deployment: data is processed within the EU' : 'Global or unverified deployment: data may be processed outside the EU. Avoid personal data.';
+  z.textContent = m.dataZone ? '🇪🇺 EU-datavyöhyke' : '⚠ EU:ta ei vahvistettu';
+  z.title = m.dataZone ? 'DataZoneStandard-deployment: tiedot käsitellään EU:n sisällä' : 'Globaali tai vahvistamaton deployment: tietoja voidaan käsitellä EU:n ulkopuolella. Vältä henkilötietoja.';
 }
 
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -185,15 +375,54 @@ function add(cls, html, raw) {
   log.appendChild(d); log.scrollTop = log.scrollHeight; return d;
 }
 function showEmpty() {
-  log.innerHTML = '<div class="empty" id="empty"><div class="logo">✦</div><h2>How can I help?</h2><p>Ask a question, pick a quick task, or look up a ticket by its ID.</p></div>';
+  log.innerHTML = '<div class="empty" id="empty"><div class="logo">✦</div><h2>Miten voin auttaa?</h2><p>Kysy jotain tai valitse pikatehtävä, esim. "Tiivistä UHF-1234".</p></div>';
+}
+
+// Write tools (create/update/delete) wait for the user's OK. The server pauses until /api/confirm is answered.
+function confirmCard(ev, typing) {
+  const c = document.createElement('div'); c.className = 'confirm';
+  const rows = Object.entries(ev.args || {}).map(([k, v]) =>
+    `<tr><td>${esc(k)}</td><td>${esc(typeof v === 'string' ? v : JSON.stringify(v, null, 2))}</td></tr>`).join('');
+  c.innerHTML = `<h4>⚠ Avustaja haluaa tehdä muutoksen: ${esc(ev.name)}</h4>
+    <div class="desc">${esc((ev.description || '').split('\n')[0])}</div>
+    ${rows ? `<table>${rows}</table>` : ''}
+    <div class="actions"><button class="primary" data-allow="true">Salli</button><button class="ghost" data-allow="false">Peruuta</button></div>`;
+  const label = typing.lastChild, before = label.textContent; label.textContent = ' Odotetaan hyväksyntääsi…';
+  c.querySelectorAll('button').forEach((b) => b.onclick = async () => {
+    const allow = b.dataset.allow === 'true';
+    c.querySelectorAll('button').forEach((x) => x.disabled = true);
+    const r = await fetch('/api/confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: ev.id, allow }) })
+      .then((r) => r.json()).catch((e) => ({ error: e.message }));
+    c.querySelector('.actions').innerHTML = `<span class="answer">${r.error ? '⚠ ' + esc(r.error) : allow ? '✓ Sallittu' : '✗ Peruttu'}</span>`;
+    label.textContent = before;
+  });
+  return c;
+}
+
+function copyButton(getText, label = 'Kopioi') {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'copy'; b.textContent = label;
+  b.onclick = async () => {
+    const text = getText().trim();
+    let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch {}
+    if (!ok) { // fallback for windows where the Clipboard API is blocked
+      const ta = Object.assign(document.createElement('textarea'), { value: text });
+      ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select();
+      try { ok = document.execCommand('copy'); } catch {}
+      ta.remove();
+    }
+    b.textContent = ok ? '✓ Kopioitu' : 'Kopiointi ei onnistunut';
+    setTimeout(() => { b.textContent = label; }, 1500);
+  };
+  return b;
 }
 
 async function send(text) {
   text = text.trim(); if (!text || busy) return;
-  busy = true; $('send').disabled = $('retrieve').disabled = true;
+  busy = true; $('send').disabled = true;
   history.push({ role: 'user', content: text });
   add('user', text, true);
-  const typing = document.createElement('div'); typing.className = 'typing'; typing.innerHTML = '<span class="spin"></span> Thinking…';
+  const typing = document.createElement('div'); typing.className = 'typing'; typing.innerHTML = '<span class="spin"></span> Mietitään…';
   log.appendChild(typing); log.scrollTop = log.scrollHeight;
   const tools = {};
   try {
@@ -211,14 +440,22 @@ async function send(text) {
           const d = document.createElement('details'); d.className = 'tool';
           d.innerHTML = `<summary><span class="spin"></span> <b>${esc(ev.name)}</b> <span>${esc(JSON.stringify(ev.args))}</span></summary><pre></pre>`;
           log.insertBefore(d, typing); tools[ev.id] = d;
+        } else if (ev.type === 'confirm') {
+          log.insertBefore(confirmCard(ev, typing), typing);
         } else if (ev.type === 'tool_result') {
           const d = tools[ev.id]; d.querySelector('.spin').outerHTML = ev.ok ? '✓' : '✗'; d.querySelector('pre').textContent = ev.preview;
+        } else if (ev.type === 'todos_changed') {
+          loadMyTodos(); // the chat added or ticked one of your own to-dos
         } else if (ev.type === 'notice') {
           log.insertBefore(Object.assign(document.createElement('div'), { className: 'msg notice', textContent: ev.text }), typing);
         } else if (ev.type === 'message') {
           history.push({ role: 'assistant', content: ev.content });
-          const m = add('assistant', md(ev.content || '(empty response)'));
-          const u = ev.usage; if (u) m.insertAdjacentHTML('beforeend', `<div class="meta">${esc($('model').value)} · ${u.prompt_tokens} in / ${u.completion_tokens} out tokens</div>`);
+          const m = add('assistant', md(ev.content || '(tyhjä vastaus)'));
+          // "Kopioi" on every code block (e.g. a ready Slack/Teams message) and on the whole reply.
+          m.querySelectorAll('pre').forEach((pre) => pre.appendChild(copyButton(() => pre.querySelector('code')?.textContent || pre.textContent)));
+          const u = ev.usage;
+          m.insertAdjacentHTML('beforeend', `<div class="meta"><span>${u ? `${esc($('model').value)} · ${u.prompt_tokens} sisään / ${u.completion_tokens} ulos tokenia` : ''}</span></div>`);
+          m.querySelector('.meta').appendChild(copyButton(() => ev.content || '', 'Kopioi vastaus'));
           log.insertBefore(m, typing);
         } else if (ev.type === 'error') throw new Error(ev.error);
       }
@@ -228,7 +465,7 @@ async function send(text) {
     history.pop(); // let the user retry the same question
     add('error', '⚠ ' + e.message, true);
   } finally {
-    typing.remove(); busy = false; $('send').disabled = $('retrieve').disabled = false; input.focus(); log.scrollTop = log.scrollHeight;
+    typing.remove(); busy = false; $('send').disabled = false; input.focus(); log.scrollTop = log.scrollHeight;
   }
 }
 
@@ -237,28 +474,135 @@ $('composer').addEventListener('submit', (e) => { e.preventDefault(); const v = 
 input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('composer').requestSubmit(); } });
 input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 200) + 'px'; });
 $('clear').onclick = () => { if (busy) return; history = []; showEmpty(); };
-function retrieve() {
-  const id = $('ticketId').value.trim().toUpperCase();
-  if (!/^[A-Z][A-Z0-9]*-\d+$/.test(id)) { $('ticketId').style.borderColor = 'var(--err)'; return; }
-  $('ticketId').style.borderColor = ''; send(ticketPrompt(id));
+// ─── Quick tasks that follow the weekday and the calendar ───
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const dateKey = (d) => d.toLocaleDateString('sv-SE'); // YYYY-MM-DD in local time
+// For testing: ?today=2026-11-02 pretends it is that day.
+const today = () => { const t = new URLSearchParams(location.search).get('today'); return t ? new Date(t + 'T12:00') : new Date(); };
+// Moves n working days forward (n < 0 = backward), skipping Saturdays and Sundays.
+function addWorkdays(date, n) {
+  const d = new Date(date), step = n < 0 ? -1 : 1;
+  while (n !== 0) { d.setDate(d.getDate() + step); if (d.getDay() % 6 !== 0) n -= step; }
+  return d;
 }
-$('retrieve').onclick = retrieve;
-$('ticketId').addEventListener('keydown', (e) => { if (e.key === 'Enter') retrieve(); });
-$('presets').innerHTML = '';
-PRESETS.forEach((p) => {
-  const b = document.createElement('button'); b.className = 'preset'; b.innerHTML = `${esc(p.label)}<small>${esc(p.hint)}</small>`;
-  b.onclick = () => send(p.prompt); $('presets').appendChild(b);
-});
+const evDate = (e) => (e.allDay ? e.start : dateKey(new Date(e.start)));
+const evTime = (e) => (e.allDay ? '' : new Date(e.start).toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' }));
+const evDay = (e) => new Date(e.allDay ? e.start + 'T12:00' : e.start).toLocaleDateString('fi-FI', { weekday: 'long', day: 'numeric', month: 'numeric' });
+
+let calendar = { updatedAt: null, events: [] };
+// Returns null if the button should be hidden, otherwise the meeting that triggered it (or {} for weekday/always).
+function matchPreset(p, now) {
+  if (!p.show) return {};
+  for (const rule of p.show) {
+    if (rule.days && !rule.days.includes(DAY_KEYS[now.getDay()])) continue;
+    if (!rule.meeting) return {};
+    // Which days to look at: N working days ahead (workdaysBefore) and/or N working days back (workdaysAfter).
+    const list = (v) => [].concat(v ?? []);
+    const offsets = [...list(rule.workdaysBefore), ...list(rule.workdaysAfter).map((n) => -n)];
+    const targets = (offsets.length ? offsets : [0]).map((n) => dateKey(addWorkdays(now, n)));
+    const ev = calendar.events.find((e) => targets.includes(evDate(e)) && rule.meeting.test(e.title));
+    if (ev) return ev;
+  }
+  return null;
+}
+function fill(text, ev, now) {
+  const end = dateKey(addWorkdays(now, 4));
+  const week = calendar.events.filter((e) => evDate(e) >= dateKey(now) && evDate(e) <= end)
+    .map((e) => `- ${evDay(e)} ${evTime(e)} ${e.title}`).join('\n') || '(ei palavereja)';
+  const base = ev.start ? new Date(evDate(ev) + 'T12:00') : now, pm = new Date(base.getFullYear(), base.getMonth() - 1, 1);
+  const prevMonth = `${pm.getFullYear()}-${String(pm.getMonth() + 1).padStart(2, '0')}`;
+  const prevMonthName = pm.toLocaleDateString('fi-FI', { month: 'long', year: 'numeric' }).replace(/kuuta/, 'kuu');
+  text = text.replace(/\{prevMonth\}/g, prevMonth).replace(/\{prevMonthName\}/g, prevMonthName);
+  return text.replace(/\{meeting\}/g, ev.title || '').replace(/\{time\}/g, ev.title ? evTime(ev) : '')
+    .replace(/\{day\}/g, ev.title ? evDay(ev) : '').replace(/\{week\}/g, week).trim();
+}
+// Ticked to-dos are stored in this browser per date (try/catch: storage can be unavailable).
+const todoKey = (now) => 'todos:' + dateKey(now);
+const loadTicks = (now) => { try { return JSON.parse(localStorage.getItem(todoKey(now))) || {}; } catch { return {}; } };
+const saveTicks = (now, ticks) => { try { localStorage.setItem(todoKey(now), JSON.stringify(ticks)); } catch {} };
+
+// Your own to-dos, added from the chat ("add a todo: …"). Saved by the server in todos.json, so they stay
+// day after day until ticked; a ticked one is still shown that day and disappears when the date changes.
+let myTodos = [];
+async function loadMyTodos() {
+  myTodos = await fetch('/api/todos').then((r) => r.json()).then((d) => d.items || []).catch(() => myTodos);
+  renderToday();
+}
+
+function renderToday() {
+  const now = today();
+  const wd = now.toLocaleDateString('fi-FI', { weekday: 'long' }); $('dayName').textContent = wd[0].toUpperCase() + wd.slice(1);
+  $('dayDate').textContent = now.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric', year: 'numeric' });
+  const items = [...(TODOS.every || []), ...(TODOS[DAY_KEYS[now.getDay()]] || [])].map((t) => (typeof t === 'string' ? { text: t } : t))
+    .filter((t) => matchPreset(t, now)); // to-dos with a `show` rule only appear when it matches
+  const ticks = loadTicks(now), box = $('todos'); box.innerHTML = '';
+  const mine = myTodos.filter((t) => !t.doneOn || t.doneOn === dateKey(now));
+  const count = () => {
+    const n = items.filter((t) => ticks[t.text]).length + mine.filter((t) => t.doneOn).length, all = items.length + mine.length;
+    $('todoCount').textContent = all ? `${n} / ${all}` : '';
+  };
+  if (!items.length && !mine.length) box.innerHTML = '<div class="none">Ei tehtäviä tänään.</div>';
+  for (const t of items) {
+    const row = document.createElement('label'); row.className = 'todo' + (t.show ? ' timely' : '') + (ticks[t.text] ? ' done' : '');
+    row.innerHTML = `<input type="checkbox" ${ticks[t.text] ? 'checked' : ''}><span>${esc(t.text)}${t.hint ? `<small>${esc(t.hint)}</small>` : ''}</span>`;
+    row.querySelector('input').onchange = (e) => {
+      if (e.target.checked) ticks[t.text] = true; else delete ticks[t.text];
+      saveTicks(now, ticks); row.classList.toggle('done', e.target.checked); count();
+    };
+    box.appendChild(row);
+  }
+  for (const t of mine) {
+    const added = t.added < dateKey(now) ? `Lisätty ${new Date(t.added + 'T12:00').toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })}` : '';
+    const row = document.createElement('label'); row.className = 'todo own' + (t.doneOn ? ' done' : '');
+    row.innerHTML = `<input type="checkbox" ${t.doneOn ? 'checked' : ''}><span>${esc(t.text)}${added ? `<small>${esc(added)}</small>` : ''}</span>`;
+    row.querySelector('input').onchange = async (e) => {
+      const done = e.target.checked;
+      const r = await fetch('/api/todos/done', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: t.id, done }) })
+        .then((x) => x.json()).catch(() => ({}));
+      if (r.item) Object.assign(t, r.item); else e.target.checked = !done;
+      row.classList.toggle('done', !!t.doneOn); count();
+    };
+    box.appendChild(row);
+  }
+  count();
+}
+
+function renderPresets() {
+  const now = today(); $('presets').innerHTML = $('dayPresets').innerHTML = '';
+  for (const p of PRESETS) {
+    const ev = matchPreset(p, now); if (!ev) continue;
+    const b = document.createElement('button'); b.className = 'preset' + (p.show ? ' timely' : '');
+    b.innerHTML = `${esc(p.label)}<small>${esc(fill(p.hint || '', ev, now))}</small>`;
+    // Tasks with a weekday/meeting rule go under today's heading; the rest stay in "Quick tasks".
+    b.onclick = () => send(fill(p.prompt, ev, now)); $(p.show ? 'dayPresets' : 'presets').appendChild(b);
+  }
+  if (!$('dayPresets').children.length) $('dayPresets').innerHTML = '<div class="none">Ei erityistä tänään.</div>';
+  renderToday();
+  const s = $('calStatus'), age = calendar.updatedAt ? (Date.now() - new Date(calendar.updatedAt)) / 36e5 : null;
+  s.textContent = age === null ? '📅 Kalenteria ei vielä ole: näytetään vain viikonpäivän tehtävät.'
+    : `📅 Kalenteri päivitetty ${new Date(calendar.updatedAt).toLocaleString('fi-FI', { weekday: 'short', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+      + (age > 36 ? ' ⚠ vanhentunut: onko Claude Desktop auki aamuisin?' : '');
+  s.classList.toggle('stale', age === null || age > 36);
+}
+async function loadCalendar() {
+  calendar = await fetch('/api/calendar').then((r) => r.json()).catch(() => calendar);
+  renderPresets();
+}
+// The window often stays open for days: refresh when you come back to it.
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { loadCalendar(); loadMyTodos(); } });
+renderPresets();
+loadCalendar();
+loadMyTodos();
 
 async function init() {
   showEmpty();
   const [status, tools] = await Promise.all([fetch('/api/status').then((r) => r.json()), fetch('/api/tools').then((r) => r.json())]);
   $('mcpDot').className = 'dot ' + (status.mcp.connected ? 'ok' : 'bad');
-  $('mcpText').textContent = status.mcp.connected ? `MCP · ${tools.tools.length} tools${status.mcp.readOnly ? ' (read-only)' : ''}` : 'MCP offline';
+  $('mcpText').textContent = status.mcp.connected ? `MCP · ${tools.tools.length} työkalua${status.mcp.readOnly ? ' (vain luku)' : ''}` : 'MCP ei yhteyttä';
   $('mcpText').title = status.mcp.error || '';
   $('tools').innerHTML = tools.tools.map((t) => `<span title="${esc(t.description || '')}">${esc(t.name)}</span>`).join('');
   const banner = (t) => { $('banner').textContent = t; $('banner').style.display = 'block'; };
-  if (!status.azureConfigured) banner('Azure is not configured — set AOAI_BASE_URL and AZURE_API_KEY in .env.');
+  if (!status.azureConfigured) banner('Azurea ei ole määritetty: aseta AOAI_BASE_URL ja AZURE_API_KEY .env-tiedostoon.');
   if (status.mcp.error) banner(status.mcp.error);
   try {
     const m = await fetch('/api/models').then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error); return j; });
@@ -268,7 +612,7 @@ async function init() {
     if (status.defaultModel && m.models.some((x) => x.id === status.defaultModel)) $('model').value = status.defaultModel;
     updateZone();
     if (m.warning) banner(m.warning);
-  } catch (e) { $('model').innerHTML = '<option value="">unavailable</option>'; banner('Could not load models: ' + e.message); }
+  } catch (e) { $('model').innerHTML = '<option value="">ei saatavilla</option>'; banner('Mallien lataus epäonnistui: ' + e.message); }
 }
 init();
 </script>

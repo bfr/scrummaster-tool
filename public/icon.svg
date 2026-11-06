@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- macOS-style rounded square in HDS coat-of-arms blue (#0072c6), with the usual margin around it -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#0072c6"/>
+  <!-- the ✦ star from the app header -->
+  <path fill="#fff" d="M512 270 C532 448 576 492 754 512 C576 532 532 576 512 754 C492 576 448 532 270 512 C448 492 492 448 512 270 Z"/>
+</svg>
