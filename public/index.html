@@ -278,15 +278,12 @@ const TODOS = {
 
 const PRESETS = [
   // Weekday rules
-  { label: 'Tuleva viikko', hint: 'Suunnittele viikko palaverien pohjalta', show: [{ days: ['mon'] }],
-    prompt: 'Tässä ovat palaverini seuraavan 5 työpäivän ajalta:\n{week}\n\nAuta minua suunnittelemaan viikko Scrum Masterina: mitä minun pitää valmistella ja milloin, ja mitä Jira-tietoja kannattaa tarkistaa ennen mitäkin palaveria?' },
-  { label: 'Viikon yhteenveto', hint: 'Mitä tiimi sai valmiiksi', show: [{ days: ['fri'] }],
-    prompt: 'Tee yhteenveto siitä, mitä tiimi sai tällä viikolla valmiiksi Jirassa, ja tarkista, täsmäävätkö kirjatut tunnit.' },
-
   { label: 'Tuntien tarkistus', hint: 'Tempo vs. Severa, viime viikko', show: [{ days: ['mon'] }],
     prompt: 'Vertaa kehittäjien viime viikon tunnit Tempossa ja Severassa (check_hours_match, oletuksena viime viikon ma–pe) ja näytä tulos sellaisenaan. '
       + 'Kirjoita sen perään koodilohkoon valmis Slack-viesti project management -kanavalle: jos kaikki täsmää, kuittaus muotoa '
       + '"Kehittäjien tunnit <pv.kk.>–<pv.kk.> tarkistettu ✅" (käytä työkalun antamia päivämääriä); jos eroja on, lista kehittäjistä, joiden tunnit eivät täsmää, ja ero tunteina.' },
+  { label: 'Viikon yhteenveto', hint: 'Mitä tiimi sai valmiiksi', show: [{ days: ['fri'] }],
+    prompt: 'Tee yhteenveto siitä, mitä tiimi sai tällä viikolla valmiiksi Jirassa, ja tarkista, täsmäävätkö kirjatut tunnit.' },
 
   // Meeting rules: the working day before
   { label: 'Valmistele sprintin vaihto', hint: 'Huomenna: {meeting} {time}', show: [{ meeting: SPRINT_CHANGE, workdaysBefore: 1 }],
@@ -307,8 +304,6 @@ const PRESETS = [
       + 'Kun vastaan, aja get_sprint_capacity ja näytä tulos sellaisenaan. Kirjoita sen perään koodilohkoon lyhyt viesti Aleksille ("Moi Aleksi! …") alkavan sprintin kapasiteettiarviosta (pisteet yhteensä, FE ja BE).' },
 
   // Meeting rules: the same day
-  { label: 'Refinement-lista', hint: 'Tänään: {meeting} {time}', show: [{ meeting: /refinement/i }],
-    prompt: 'Hae kaikki refinement-tiketit ja näytä ne epiikeittäin ryhmiteltyinä.' },
   { label: 'Uusimmat refinement-tiketit', hint: 'Luotu viimeisen 2 viikon aikana', show: [{ days: ['thu', 'fri'] }, { meeting: /refinement/i }],
     prompt: 'Näytä viimeisen 2 viikon aikana luodut refinement-tiketit (get_refinement_recent).' },
   { label: 'Sprintin vaihdon tarkistuslista', hint: 'Tänään: {meeting} {time}', show: [{ meeting: SPRINT_CHANGE }],
@@ -574,7 +569,7 @@ function renderToday() {
   const now = today();
   const wd = now.toLocaleDateString('fi-FI', { weekday: 'long' }); $('dayName').textContent = wd[0].toUpperCase() + wd.slice(1);
   $('dayDate').textContent = now.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric', year: 'numeric' });
-  const items = [...(TODOS.every || []), ...(TODOS[DAY_KEYS[now.getDay()]] || [])].map((t) => (typeof t === 'string' ? { text: t } : t))
+  const items = [...(TODOS[DAY_KEYS[now.getDay()]] || []), ...(TODOS.every || [])].map((t) => (typeof t === 'string' ? { text: t } : t))
     .filter((t) => matchPreset(t, now)); // to-dos with a `show` rule only appear when it matches
   const ticks = loadTicks(now), box = $('todos'); box.innerHTML = '';
   const mine = myTodos.filter((t) => !t.doneOn || t.doneOn === dateKey(now));
