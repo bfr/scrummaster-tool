@@ -134,13 +134,13 @@ browser (public/index.html)  ──HTTP/NDJSON──▶  server.mjs  ──▶ A
   MCP scripts run through `runMcpScript()` (spawn, no shell, numeric args only, 15 min timeout).
   A `write: true` local tool goes through the same Allow/Cancel step as MCP write tools. The sprint-day quick tasks
   "Päivitä sprinttiraportti" (closed sprint → confirm → page → confirm → MCP `update_confluence_sprint_page`, same code as `npm run update`)
-  and "Päivitä kvartaalisivut" (asks source + target page) are step-by-step prompts in `PRESETS`. Chat history sent to the model holds
+  and "Päivitä kvartaalisivut" (`find_quarter_pages`: under roadmap page `QUARTER_ROADMAP_PAGE_ID` (default 6567526237) → "Tiekartta <year>: seuranta" → "Qn/<year> seurattavat epicit" = target, its child "… Päivämäärillä d.m. - d.m.yyyy …" = source; the quarter whose date range contains today wins, later one on a shared boundary day; then asks "Onko nämä oikeat sivut…" with titles + links) are step-by-step prompts in `PRESETS`. Chat history sent to the model holds
   only visible text, so step prompts make the model repeat needed IDs in its questions.
 - **Copy buttons:** every assistant reply gets "Kopioi vastaus" and every code block "Kopioi" (`copyButton()` in `public/index.html`,
   with an `execCommand('copy')` fallback). Preset prompts that produce a Slack/Teams message ask for it in a code block.
 - **Own to-dos from the chat:** the server has its own (non-MCP) tools `add_todo`, `list_todos`, `complete_todo` (`TODO_TOOLS` in `server.mjs`),
   stored in `todos.json` (git-ignored; `{ id, text, added, doneOn }`). They need no Allow step (they only touch that file). Open items stay every day;
-  an item ticked done is shown that day and pruned once the date changes. The Today panel lists them after the weekday routine (dashed border).
+  an item ticked done is shown that day and pruned once the date changes. The Today panel lists them after the weekday routine (dashed border); any ticked item (routine or own) moves to the bottom of the list, unticking puts it back.
 - **Today panel / weekday to-dos:** `TODOS` in `public/index.html` (`mon`…`sun`, plus `every` = checked on every weekday, used for meeting-based to-dos such as `BILLING_DAY` ("Hel.fi laskutus"); items are text or `{ text, hint, show }`; `show` uses the same rules as presets, e.g. `SPRINT_CHANGE_TOMORROW`). Ticks live in the
   browser's localStorage under `todos:YYYY-MM-DD` (per day, per browser — fine for a single-user local app). Presets with a `show` rule are
   listed under the day heading; presets without one stay in "Quick tasks". `TODOS` is the user's real routine (mon–fri), with sprint-timing rules `SPRINT_CHANGE_TOMORROW/TODAY/YESTERDAY/CHANGED_THIS_WEEK`.
@@ -153,6 +153,7 @@ browser (public/index.html)  ──HTTP/NDJSON──▶  server.mjs  ──▶ A
   Google Calendar connector; the app itself has no Google access. `?today=YYYY-MM-DD` previews another day.
 - **New example button:** add an object to `PRESETS` at the top of the `<script>` in `public/index.html`
   (`label`, `hint`, `prompt`). The prompt is just a message sent to the assistant.
+  A preset with `url` instead of `prompt` just opens that link in a new tab (e.g. "Tietoturvaweeklyn muistiinpanot" on days with Tietoturva-weekly in the calendar).
 - **Change tone/rules/language of answers:** edit `SYSTEM_PROMPT` in `server.mjs`. Its key rule (the user asked for it): ready-made tool
   output (refinement lists, reports…) is shown exactly as the MCP returns it — no translating, summarising or reformatting unless asked.
 - **A new input in the sidebar (e.g. sprint ID, date range):** add the HTML in `<aside>`, a small JS handler that builds a prompt string and calls `send(prompt)`. The model figures out which tool to call from the MCP tool descriptions.

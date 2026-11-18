@@ -235,15 +235,21 @@ const SPRINT_CHANGE_YESTERDAY = [{ meeting: SPRINT_CHANGE, workdaysAfter: 1 }]; 
 const SPRINT_CHANGED_THIS_WEEK = [{ meeting: SPRINT_CHANGE, workdaysAfter: [1, 2, 3, 4] }]; // changed since last week's same weekday
 // Billing day: the day of the "Hel.fi laskutus" meeting (any weekday).
 const BILLING_DAY = [{ meeting: /hel\.?fi laskutus/i }];
+// Days with the security weekly meeting ("Tietoturva-weekly" in the calendar; its day can move).
+const SECURITY_WEEKLY = [{ meeting: /tietoturva.?weekly/i }];
+
 const TODOS = {
   // `every`: checked on every weekday (so these normally have a `show` rule).
   every: [
     { text: 'Tarkasta tunnit aamusta', show: BILLING_DAY },
     { text: 'Laita Artolle laskutuserittelyt', show: BILLING_DAY },
+    { text: 'Käy päivittämässä tietoturvaweeklyn pohja', show: SECURITY_WEEKLY },
+    { text: 'Päivitä resourcing muistiinpanot', show: [{ meeting: /resourcing/i }] },
   ],
   mon: [
     'Tarkista tunnit',
     // Only on the Monday before a sprint change (planning/demo/retro on Tuesday):
+    { text: 'Käy seuraavan sprintin tiketit läpi refinementissa FE/BE ryhmissä', show: SPRINT_CHANGE_TOMORROW },
     { text: 'Kysy htp-arviot', show: SPRINT_CHANGE_TOMORROW },
     { text: 'Tee uusi sprinttiraporttipohja', show: SPRINT_CHANGE_TOMORROW },
     { text: 'Laita Aleksille kapasiteettiarvio', show: SPRINT_CHANGE_TOMORROW },
@@ -253,13 +259,14 @@ const TODOS = {
   ],
   tue: [
     'Asioinnin e2e dailyssä',
-    // Only on sprint-change day:
+    // Only on sprint-change day. `sortAt` = sort as if at that time (default: the meeting's time, here the 9.40 demo),
+    // so the last four come after the Tietoturva-weekly to-do (12.00) when both are on the same day.
     { text: 'Koodikatselmustiketit', show: SPRINT_CHANGE_TODAY },
-    { text: 'Päivitä kvartaalisivut', show: SPRINT_CHANGE_TODAY },
-    { text: 'Päivitä sprinttiraportti', show: SPRINT_CHANGE_TODAY },
-    { text: 'Varmista #helfi_dev-kanavalla, että sprintin saa sulkea', show: SPRINT_CHANGE_TODAY },
     { text: 'Siirrä palaveritiketit Doneen ennen sprintin sulkemista', show: SPRINT_CHANGE_TODAY },
-    { text: 'Siirrä toistuvat palaveritiketit In progressiin', hint: 'Kun uusi sprintti on käynnistetty', show: SPRINT_CHANGE_TODAY },
+    { text: 'Varmista #helfi_dev-kanavalla, että sprintin saa sulkea', show: SPRINT_CHANGE_TODAY, sortAt: '12:30' },
+    { text: 'Päivitä sprinttiraportti', show: SPRINT_CHANGE_TODAY, sortAt: '12:30' },
+    { text: 'Päivitä kvartaalisivut', show: SPRINT_CHANGE_TODAY, sortAt: '12:30' },
+    { text: 'Siirrä toistuvat palaveritiketit In progressiin', hint: 'Kun uusi sprintti on käynnistetty', show: SPRINT_CHANGE_TODAY, sortAt: '12:30' },
   ],
   wed: [
     // Only on the day after the sprint change:
@@ -282,6 +289,11 @@ const PRESETS = [
     prompt: 'Vertaa kehittäjien viime viikon tunnit Tempossa ja Severassa (check_hours_match, oletuksena viime viikon ma–pe) ja näytä tulos sellaisenaan. '
       + 'Kirjoita sen perään koodilohkoon valmis Slack-viesti project management -kanavalle: jos kaikki täsmää, kuittaus muotoa '
       + '"Kehittäjien tunnit <pv.kk.>–<pv.kk.> tarkistettu ✅" (käytä työkalun antamia päivämääriä); jos eroja on, lista kehittäjistä, joiden tunnit eivät täsmää, ja ero tunteina.' },
+  // `url` instead of `prompt`: the button just opens the link in a new browser tab.
+  { label: 'Tietoturvaweeklyn muistiinpanot', hint: 'Tänään: {meeting} {time}', show: SECURITY_WEEKLY,
+    url: 'https://helsinkisolutionoffice.atlassian.net/wiki/spaces/HEL/pages/10222141441/Tietoturvakatsaus+2026+-+kev+tkausi+7.1.+alkaen' },
+  { label: 'Dev-tiimin sisäinen kehittäminen', hint: 'Tänään: {meeting} {time}', show: [{ meeting: /dev-tiimin sisäinen kehittäminen/i }],
+    url: 'https://helsinkisolutionoffice.atlassian.net/wiki/spaces/HEL/pages/7875493934/Dev-tiimin+sis+inen+kehitt+misen+kehitt+minen' },
   { label: 'Viikon yhteenveto', hint: 'Mitä tiimi sai valmiiksi', show: [{ days: ['fri'] }],
     prompt: 'Tee yhteenveto siitä, mitä tiimi sai tällä viikolla valmiiksi Jirassa, ja tarkista, täsmäävätkö kirjatut tunnit.' },
 
@@ -318,27 +330,33 @@ const PRESETS = [
       + '3. Vasta kun vahvistan sivun, kutsu update_confluence_sprint_page parametreilla sprint_id = sprintin ID ja page_id = sivun ID.\n'
       + 'Jos vastaan "ei", kysy minulta oikea sprintti tai sivu (ID tai linkki) ennen kuin jatkat.' },
   { label: 'Päivitä kvartaalisivut', hint: 'Kvartaalipisteet ja piirakkakaaviot', show: [{ meeting: SPRINT_CHANGE }],
-    prompt: 'Haluan päivittää kvartaalisivut Confluencessa (sama kuin npm run updateQuarterPages). Kysy minulta ensin:\n'
-      + '1. lähdesivu (epiikkikatsaus, jossa kvartaalipisteet): sivun ID tai linkki\n'
-      + '2. kohdesivu (piirakkakaaviosivu): sivun ID tai linkki\n'
-      + 'Odota vastaustani. Jos annan linkin, poimi sivun ID linkistä (numero /pages/ jälkeen). Kun molemmat ovat tiedossa, aja update_quarter_pages.' },
+    prompt: 'Haluan päivittää kvartaalisivut Confluencessa (sama kuin npm run updateQuarterPages). Etene vaihe kerrallaan.\n'
+      + '1. Hae meneillään olevan kvartaalin sivut (find_quarter_pages). Kysy sitten täsmälleen tässä muodossa (ilman lainausmerkkejä) ja lopeta vastaus tähän, älä aja vielä update_quarter_pages:\n'
+      + '"Onko nämä oikeat sivut, joita pitää päivittää?\n- Lähdesivu: [<lähdesivun otsikko>](<linkki>) (ID <id>)\n- Kohdesivu: [<kohdesivun otsikko>](<linkki>) (ID <id>)"\n'
+      + 'Jos työkalu ei löytänyt sivuja, kysy minulta lähdesivun ja kohdesivun ID:t tai linkit (ID on linkissä /pages/ jälkeen).\n'
+      + '2. Aja update_quarter_pages näillä ID:illä vasta kun vastaan kyllä. Jos annan muut sivut, kysy vahvistus niistäkin samassa muodossa.' },
   // The working day after the sprint change
   { label: 'Sprinttiraportin jakoviesti', hint: 'Teams-viesti raportin linkillä', show: [{ meeting: SPRINT_CHANGE, workdaysAfter: 1 }],
     prompt: 'Hae viimeisin suljettu sprintti (get_closed_sprints) ja sen sprinttiraporttisivu (find_sprint_report_pages). Kirjoita lyhyt, ystävällinen Teams-viesti, '
       + 'jolla jaan sprintin <nimi> raportin, ja laita sivun linkki mukaan. Näytä viesti koodilohkossa, jotta voin kopioida sen.' },
   { label: 'Sprintin vaihdon Slack-viesti', hint: 'Excelin luvuista (get_slack_message)', show: [{ meeting: SPRINT_CHANGE, workdaysAfter: 1 }],
     prompt: 'Generoi sprintin vaihdon Slack-viesti (get_slack_message) ja näytä se sellaisenaan koodilohkossa, jotta voin kopioida sen.' },
-  { label: 'Luo sprinttisivu', hint: 'Confluence-sivu uudelle sprintille', show: [{ meeting: SPRINT_CHANGE }],
-    prompt: 'Luo Confluence-sprinttisivu uudelle sprintille.' },
   { label: 'Laskutuksen yhteenveto', hint: 'Tänään: {meeting} {time} · {prevMonthName}', show: BILLING_DAY,
     prompt: 'Anna minulle laskutuksen yhteenveto kuukaudelta {prevMonthName} (get_billing_summary, month: {prevMonth}).' },
-  { label: 'Kirjatut tunnit', hint: 'Tänään: {meeting} {time}', show: [{ meeting: /resourcing/i }],
-    prompt: 'Näytä nykyisen sprintin kirjatut tunnit kehittäjittäin.' },
+  { label: 'Resourcing Weekly -muistiinpanot', hint: 'Tänään: {meeting} {time}', show: [{ meeting: /resourcing/i }],
+    url: 'https://druidfi.atlassian.net/wiki/spaces/PM/pages/686489656/Resourcing+Weekly+Notes' },
   { label: 'Backlogin katsaus', hint: 'Tänään: {meeting} {time}', show: [{ meeting: /backlogin tarkastelu|backlog/i }],
     prompt: 'Anna katsaus backlogiin: vanhimmat tiketit, tiketit ilman epiikkiä ja korkean prioriteetin tiketit.' },
 
   // Always
-  { label: 'Nykyiset sprinttisivut', hint: 'Linkit Confluencen sprinttiraportteihin', prompt: 'Anna linkit uusimpiin sprinttiraporttisivuihin.' },
+  { label: 'Liputettujen tikettien läpikäynti', hint: 'Board 220: mistä lipun voi poistaa',
+    prompt: 'Käy läpi liputetut tiketit boardilta 220 (review_flagged_tickets, board_id: "220") ja näytä tulos sellaisenaan. '
+      + 'Listaa sen perään erikseen otsikolla "Tiketit, joista lipun voi poistaa" ne tiketit, joille työkalu ehdottaa lipun poistoa, '
+      + 'jokainen omalle rivilleen linkkinä muodossa [UHF-1234](https://helsinkisolutionoffice.atlassian.net/browse/UHF-1234) ja tiketin otsikko. '
+      + 'Jos poistettavia ei ole, kerro se ja lopeta. Muuten kysy lopuksi: "Poistetaanko liput näiltä tiketeiltä (<avaimet pilkuilla eroteltuina>)? Vastaa kyllä, niin poistan ne." Lopeta vastaus tähän, älä poista vielä mitään.\n'
+      + 'Kun vastaan kyllä, aja remove_jira_flags (board_id: "220") täsmälleen niillä avaimilla, jotka listasit, ja näytä tulos.' },
+  { label: 'Riippuvuuksien tarkistus', hint: 'Board 220: onko riippuvat tiketit oikeassa järjestyksessä',
+    prompt: 'Tarkista boardin 220 avointen tikettien riippuvuudet (get_ticket_dependencies, board_id: "220") ja näytä tulos sellaisenaan.' },
   { label: 'Tiimin prosessi', hint: 'Miten prosessimme toimii', prompt: 'Selitä tiimimme prosessi: mitä tapahtuu sprintin minäkin päivänä?' },
   { label: 'Mitä osaat?', hint: 'Työkalut ja esimerkkejä', prompt: 'Mitä työkaluja sinulla on ja mitä voin kysyä sinulta?' },
 ];
@@ -541,6 +559,17 @@ function matchPreset(p, now) {
   }
   return null;
 }
+// Sort order for the Today panel: items without a meeting first (in the order written), then items for
+// today's meetings in calendar order, then items about another day's meeting (e.g. "Huomenna: …").
+function calendarOrder(items, now) {
+  const key = (x) => {
+    const ev = x.ev, at = x.sortAt ?? x.p?.sortAt; // optional `sortAt: 'HH:MM'` overrides the meeting time
+    if (!ev.start) return -1;
+    if (evDate(ev) !== dateKey(now)) return Infinity;
+    return new Date(at ? `${dateKey(now)}T${at}` : ev.start).getTime();
+  };
+  return items.sort((a, b) => key(a) - key(b)); // stable: ties keep their written order
+}
 function fill(text, ev, now) {
   const end = dateKey(addWorkdays(now, 4));
   const week = calendar.events.filter((e) => evDate(e) >= dateKey(now) && evDate(e) <= end)
@@ -569,13 +598,16 @@ function renderToday() {
   const now = today();
   const wd = now.toLocaleDateString('fi-FI', { weekday: 'long' }); $('dayName').textContent = wd[0].toUpperCase() + wd.slice(1);
   $('dayDate').textContent = now.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric', year: 'numeric' });
-  const items = [...(TODOS[DAY_KEYS[now.getDay()]] || []), ...(TODOS.every || [])].map((t) => (typeof t === 'string' ? { text: t } : t))
-    .filter((t) => matchPreset(t, now)); // to-dos with a `show` rule only appear when it matches
+  const items = calendarOrder([...(TODOS[DAY_KEYS[now.getDay()]] || []), ...(TODOS.every || [])]
+    .map((t) => (typeof t === 'string' ? { text: t } : t))
+    .map((t) => ({ ...t, ev: matchPreset(t, now) })).filter((t) => t.ev), now); // to-dos with a `show` rule only appear when it matches
   const ticks = loadTicks(now), box = $('todos'); box.innerHTML = '';
   const mine = myTodos.filter((t) => !t.doneOn || t.doneOn === dateKey(now));
+  const rows = []; // in their normal order; done rows are moved to the bottom (unticking puts a row back in place)
   const count = () => {
     const n = items.filter((t) => ticks[t.text]).length + mine.filter((t) => t.doneOn).length, all = items.length + mine.length;
     $('todoCount').textContent = all ? `${n} / ${all}` : '';
+    for (const done of [false, true]) rows.filter((r) => r.classList.contains('done') === done).forEach((r) => box.appendChild(r));
   };
   if (!items.length && !mine.length) box.innerHTML = '<div class="none">Ei tehtäviä tänään.</div>';
   for (const t of items) {
@@ -585,7 +617,7 @@ function renderToday() {
       if (e.target.checked) ticks[t.text] = true; else delete ticks[t.text];
       saveTicks(now, ticks); row.classList.toggle('done', e.target.checked); count();
     };
-    box.appendChild(row);
+    rows.push(row);
   }
   for (const t of mine) {
     const added = t.added < dateKey(now) ? `Lisätty ${new Date(t.added + 'T12:00').toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })}` : '';
@@ -598,19 +630,19 @@ function renderToday() {
       if (r.item) Object.assign(t, r.item); else e.target.checked = !done;
       row.classList.toggle('done', !!t.doneOn); count();
     };
-    box.appendChild(row);
+    rows.push(row);
   }
   count();
 }
 
 function renderPresets() {
   const now = today(); $('presets').innerHTML = $('dayPresets').innerHTML = '';
-  for (const p of PRESETS) {
-    const ev = matchPreset(p, now); if (!ev) continue;
+  const shown = calendarOrder(PRESETS.map((p) => ({ p, ev: matchPreset(p, now) })).filter((x) => x.ev), now);
+  for (const { p, ev } of shown) {
     const b = document.createElement('button'); b.className = 'preset' + (p.show ? ' timely' : '');
     b.innerHTML = `${esc(p.label)}<small>${esc(fill(p.hint || '', ev, now))}</small>`;
     // Tasks with a weekday/meeting rule go under today's heading; the rest stay in "Quick tasks".
-    b.onclick = () => send(fill(p.prompt, ev, now)); $(p.show ? 'dayPresets' : 'presets').appendChild(b);
+    b.onclick = () => (p.url ? window.open(p.url, '_blank', 'noopener') : send(fill(p.prompt, ev, now))); $(p.show ? 'dayPresets' : 'presets').appendChild(b);
   }
   if (!$('dayPresets').children.length) $('dayPresets').innerHTML = '<div class="none">Ei erityistä tänään.</div>';
   renderToday();

@@ -18,7 +18,7 @@ It is meant as a **template**: a simple, working starting point that you extend 
 - **Finnish interface:** all buttons, quick tasks and replies are in Finnish (the code is in English)
 - **Quick-task buttons** that follow the weekday and your calendar (e.g. "Prepare sprint changeover" the working day before the retro)
 - **Sprint change day helpers:** "Päivitä sprinttiraportti" finds the sprint that just closed and its Confluence page and asks you
-  to confirm both before updating (same as `npm run update`); "Päivitä kvartaalisivut" asks for the two page IDs or links and runs
+  to confirm both before updating (same as `npm run update`); "Päivitä kvartaalisivut" finds the current quarter's source and target pages under "Tiekartta <year>: seuranta" by the date range in the page title, asks you to confirm them (titles + links), and runs
   `npm run updateQuarterPages`. Both need `ALLOW_WRITE_TOOLS=true` and your Allow click
 - **Monday and sprint-change helpers:** hours check Tempo vs. Severa with a ready Slack confirmation; the "ask for htp estimates"
   message with the next sprint's number, dates and max person-days; recurring meeting/release tickets for the new sprint (preview

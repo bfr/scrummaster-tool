@@ -220,6 +220,49 @@ async function findSprintPages(number) {
     + `\n\nUusimmat sprinttisivut:\n${newest.map(show).join('\n')}`;
 }
 
+// Finds the quarter pages for today: roadmap parent (QUARTER_ROADMAP_PAGE_ID, default 6567526237) → "Tiekartta <year>: seuranta"
+// → "Qn/<year> seurattavat epicit" (target page, pie charts) → "… Päivämäärillä 7.10. - 31.12.2026 …" (source page). The date range in
+// the source title decides which quarter is going on (they don't follow calendar quarters; on a shared boundary day the later one wins).
+async function confluenceChildren(wiki, id) {
+  let pages = [], start = 0;
+  for (;;) {
+    const d = await atlGet(`${wiki}/rest/api/content/${id}/child/page?limit=100&start=${start}`);
+    pages.push(...(d.results || []));
+    if (!d._links?.next || !d.results?.length) break;
+    start += d.results.length;
+  }
+  return pages;
+}
+async function findQuarterPages() {
+  const wiki = atl('CONFLUENCE_DOMAIN'), root = env.QUARTER_ROADMAP_PAGE_ID || '6567526237';
+  if (!wiki) throw new Error('CONFLUENCE_DOMAIN is missing from the MCP .env');
+  const now = new Date(), year = now.getFullYear(), day = new Date(year, now.getMonth(), now.getDate());
+  const link = (p) => `${wiki}${p._links?.webui || ''}`;
+  const roadmap = (await confluenceChildren(wiki, root)).find((p) => new RegExp(`tiekartta\\s*${year}`, 'i').test(p.title));
+  if (!roadmap) return `Sivun ${root} alta ei löytynyt sivua "Tiekartta ${year}: seuranta".`;
+  const quarters = (await confluenceChildren(wiki, roadmap.id)).filter((p) => /^Q[1-4]\b/i.test(p.title));
+  const RANGE = /päivämäärillä\s+(\d{1,2})\.(\d{1,2})\.(\d{2,4})?\s*[-–]\s*(\d{1,2})\.(\d{1,2})\.(\d{2,4})/i;
+  const yr = (y, fallback) => (!y ? fallback : y.length === 2 ? 2000 + Number(y) : Number(y));
+  const found = [];
+  for (const q of quarters) {
+    // The source page: the first child whose title starts with the date range (optionally after "Qn/<year>").
+    const src = (await confluenceChildren(wiki, q.id)).find((c) => /^(Q[1-4]\/\d{4}\s+)?päivämäärillä/i.test(c.title) && RANGE.test(c.title));
+    if (!src) { found.push({ q }); continue; }
+    const m = src.title.match(RANGE), endY = yr(m[6], year);
+    found.push({ q, src, start: new Date(yr(m[3], endY), m[2] - 1, m[1]), end: new Date(endY, m[5] - 1, m[4]) });
+  }
+  const dated = found.filter((f) => f.src);
+  const current = dated.filter((f) => f.start <= day && day <= f.end).sort((a, b) => b.start - a.start)[0]
+    || dated.filter((f) => f.start <= day).sort((a, b) => b.start - a.start)[0];
+  const lines = found.map((f) => `- ${f.q.title}: ${f.src ? `lähdesivu "${f.src.title}" (ID ${f.src.id})` : 'lähdesivua ei löytynyt'}${f === current ? '  ← meneillään' : ''}`);
+  const head = current
+    ? `Tänään ${day.toLocaleDateString('fi-FI')} meneillään: ${current.q.title}\n`
+      + `Lähdesivu (epiikkien pisteet): ${current.src.title} (page ID ${current.src.id}) ${link(current.src)}\n`
+      + `Kohdesivu (piirakkakaaviot): ${current.q.title} (page ID ${current.q.id}) ${link(current.q)}`
+    : `Mikään kvartaalisivu ei kata päivää ${day.toLocaleDateString('fi-FI')}.`;
+  return `${head}\n\nKaikki sivun "${roadmap.title}" kvartaalit:\n${lines.join('\n')}`;
+}
+
 // Same as `npm run updateQuarterPages -- <source> <target>` in the MCP folder.
 const updateQuarterPages = (source, target) =>
   runMcpScript('updateQuarterPages.mjs', [num(source, 'source_page_id'), num(target, 'target_page_id')]);
@@ -358,6 +401,8 @@ const LOCAL_TOOLS = [
       sprint_id: { type: 'string', description: 'Sprint ID of the new sprint' },
       sprint_number: { type: 'string', description: 'Number of the new sprint, e.g. 126' } }, required: ['sprint_id', 'sprint_number'] },
     run: (a) => cloneSprintTickets(num(a.sprint_id, 'sprint_id'), num(a.sprint_number, 'sprint_number')) },
+  { name: 'find_quarter_pages', description: 'Find which quarter is going on today on the Confluence roadmap ("Tiekartta <year>: seuranta") and return the page IDs for update_quarter_pages: the source page (epic overview, "Päivämäärillä … valmistuneet epic:in tiketit") and the target page ("Qn/<year> seurattavat epicit", pie charts). Read-only.',
+    parameters: { type: 'object', properties: {} }, run: () => findQuarterPages() },
   { name: 'update_quarter_pages', write: true,
     description: 'Update the quarter pages in Confluence (same as `npm run updateQuarterPages`): writes quarter points to the source (epic overview) page and copies them to the target (pie chart) page.',
     parameters: { type: 'object', properties: {
